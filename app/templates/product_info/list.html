@@ -1,0 +1,118 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <form class="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:grid-cols-6" method="get">
+    <label class="field lg:col-span-2">
+      <span class="field-label">关键词</span>
+      <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="MSKU / ASIN / SKU / Listing">
+    </label>
+
+    <label class="field">
+      <span class="field-label">店铺站点</span>
+      <select class="field-input" name="store_site">
+        <option value="">全部</option>
+        {% for value in options.store_sites %}
+          <option value="{{ value }}" {% if filters.store_site == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="field">
+      <span class="field-label">品牌</span>
+      <select class="field-input" name="brand">
+        <option value="">全部</option>
+        {% for value in options.brands %}
+          <option value="{{ value }}" {% if filters.brand == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="field">
+      <span class="field-label">销售状态</span>
+      <select class="field-input" name="sales_status">
+        <option value="">全部</option>
+        {% for value in options.sales_statuses %}
+          <option value="{{ value }}" {% if filters.sales_status == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="field">
+      <span class="field-label">Listing</span>
+      <select class="field-input" name="listing">
+        <option value="">全部</option>
+        {% for value in options.listings %}
+          <option value="{{ value }}" {% if filters.listing == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div class="flex items-end gap-2 lg:col-span-6">
+      <button class="btn-primary" type="submit">查询</button>
+      <a class="btn-secondary inline-flex items-center" href="/">重置</a>
+    </div>
+  </form>
+
+  <div class="content-panel">
+    <div class="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h2 class="text-base font-semibold text-slate-950">产品信息</h2>
+        <p class="mt-1 text-sm text-slate-500">
+          共 {{ products.total }} 条，每页 {{ products.page_size }} 行，当前第 {{ products.page }} 页
+        </p>
+      </div>
+      <div class="text-sm text-slate-500">列表页不加载长文本备注字段</div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-50 text-left text-xs font-semibold text-slate-500">
+          <tr>
+            <th class="table-head">MSKU</th>
+            <th class="table-head">ASIN</th>
+            <th class="table-head">店铺站点</th>
+            <th class="table-head">产品名称</th>
+            <th class="table-head">SKU</th>
+            <th class="table-head">品牌</th>
+            <th class="table-head">Listing</th>
+            <th class="table-head">销售状态</th>
+            <th class="table-head">更新时间</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 bg-white text-slate-700">
+          {% for row in products.rows %}
+            <tr class="hover:bg-blue-50/60">
+              <td class="table-cell font-medium text-slate-950">{{ row.msku or "-" }}</td>
+              <td class="table-cell mono">{{ row.asin or "-" }}</td>
+              <td class="table-cell">{{ row.store_site or "-" }}</td>
+              <td class="table-cell max-w-xs truncate" title="{{ row.product_name or '' }}">{{ row.product_name or "-" }}</td>
+              <td class="table-cell mono">{{ row.sku or "-" }}</td>
+              <td class="table-cell">{{ row.brand or "-" }}</td>
+              <td class="table-cell">{{ row.listing or "-" }}</td>
+              <td class="table-cell">{{ row.sales_status or "-" }}</td>
+              <td class="table-cell">{{ row.updated_at or "-" }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td class="px-4 py-8 text-center text-slate-500" colspan="9">没有匹配的产品数据</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm">
+      {% set prev_page = products.page - 1 %}
+      {% set next_page = products.page + 1 %}
+      <a
+        class="btn-secondary inline-flex items-center {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
+        href="?q={{ filters.q or '' }}&store_site={{ filters.store_site or '' }}&brand={{ filters.brand or '' }}&sales_status={{ filters.sales_status or '' }}&listing={{ filters.listing or '' }}&page={{ prev_page }}"
+      >上一页</a>
+      <span class="text-slate-500">第 {{ products.page }} / {{ products.pages if products.pages else 1 }} 页</span>
+      <a
+        class="btn-secondary inline-flex items-center {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
+        href="?q={{ filters.q or '' }}&store_site={{ filters.store_site or '' }}&brand={{ filters.brand or '' }}&sales_status={{ filters.sales_status or '' }}&listing={{ filters.listing or '' }}&page={{ next_page }}"
+      >下一页</a>
+    </div>
+  </div>
+{% endblock %}
