@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <div class="mb-4">
+    <a class="text-sm font-medium text-blue-800 hover:underline" href="/admin-users">返回用户管理</a>
+    <h2 class="mt-2 text-xl font-semibold text-slate-950">新增用户</h2>
+    <p class="mt-1 text-sm text-slate-500">创建后台登录账号，密码会以哈希形式保存。</p>
+  </div>
+
+  {% if error %}
+    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form class="content-panel" method="post">
+    <div class="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
+      <label class="field">
+        <span class="field-label">账号</span>
+        <input class="field-input" name="username" value="{{ row.username }}" autocomplete="off" required>
+      </label>
+      <label class="field">
+        <span class="field-label">密码</span>
+        <input class="field-input" name="password" type="password" autocomplete="new-password" required>
+      </label>
+      <label class="field">
+        <span class="field-label">角色</span>
+        <select class="field-input" name="role">
+          <option value="viewer" {% if row.role == "viewer" %}selected{% endif %}>viewer</option>
+          <option value="admin" {% if row.role == "admin" %}selected{% endif %}>admin</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">状态</span>
+        <span class="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm text-slate-700">
+          <input name="is_active" type="checkbox" value="1" {% if row.is_active %}checked{% endif %}>
+          启用
+        </span>
+      </label>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-4">
+      <a class="btn-secondary inline-flex items-center" href="/admin-users">取消</a>
+      <button class="btn-primary" type="submit">创建</button>
+    </div>
+  </form>
+{% endblock %}

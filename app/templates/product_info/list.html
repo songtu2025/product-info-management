@@ -82,7 +82,9 @@
         <tbody class="divide-y divide-slate-100 bg-white text-slate-700">
           {% for row in products.rows %}
             <tr class="hover:bg-blue-50/60">
-              <td class="table-cell font-medium text-slate-950">{{ row.msku or "-" }}</td>
+              <td class="table-cell font-medium text-blue-800">
+                <a class="hover:underline" href="/products/{{ row.id }}">{{ row.msku or "-" }}</a>
+              </td>
               <td class="table-cell mono">{{ row.asin or "-" }}</td>
               <td class="table-cell">{{ row.store_site or "-" }}</td>
               <td class="table-cell max-w-xs truncate" title="{{ row.product_name or '' }}">{{ row.product_name or "-" }}</td>

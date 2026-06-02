@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ app_name }} - 登录</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900">
+    <main class="flex min-h-screen items-center justify-center px-5">
+      <form class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm" method="post">
+        <h1 class="text-lg font-semibold text-slate-950">登录</h1>
+        <p class="mt-1 text-sm text-slate-500">{{ app_name }}</p>
+
+        {% if error %}
+          <div class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ error }}
+          </div>
+        {% endif %}
+
+        <input name="next" type="hidden" value="{{ next }}">
+
+        <label class="field mt-5">
+          <span class="field-label">账号</span>
+          <input class="field-input" name="username" autocomplete="username" required>
+        </label>
+
+        <label class="field mt-4">
+          <span class="field-label">密码</span>
+          <input class="field-input" name="password" type="password" autocomplete="current-password" required>
+        </label>
+
+        <button class="btn-primary mt-5 w-full justify-center" type="submit">登录</button>
+      </form>
+    </main>
+  </body>
+</html>

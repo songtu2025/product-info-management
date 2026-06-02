@@ -1,0 +1,134 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <div class="content-panel">
+    <div class="border-b border-slate-200 px-4 py-4">
+      <h2 class="text-base font-semibold text-slate-950">产品信息导入预览</h2>
+      <p class="mt-1 text-sm text-slate-500">只校验 Excel，不写入数据库。</p>
+      <a class="btn-secondary mt-3 inline-flex items-center" href="/products/import/template">下载导入模板</a>
+    </div>
+
+    <form class="space-y-4 px-4 py-5" action="/products/import/preview" method="post" enctype="multipart/form-data">
+      <label class="field max-w-xl">
+        <span class="field-label">上传 Excel</span>
+        <input class="field-input" name="file" type="file" accept=".xlsx" required>
+      </label>
+      <button class="btn-primary" type="submit">校验预览</button>
+    </form>
+
+    {% if error %}
+      <div class="mx-4 mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    {% if commit_result %}
+      <div class="mx-4 mb-4 rounded-md border {% if commit_result.success %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-red-200 bg-red-50 text-red-700{% endif %} px-4 py-3 text-sm">
+        {{ commit_result.message }}
+        {% if commit_result.success %}
+          ，更新 {{ commit_result.updated_count }} 行，跳过 {{ commit_result.skipped_count }} 行。
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if preview %}
+      <div class="grid gap-3 border-t border-slate-200 px-4 py-4 md:grid-cols-4">
+        <div class="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div class="text-xs text-slate-500">总行数</div>
+          <div class="mt-1 text-lg font-semibold text-slate-950">{{ preview.total_rows }}</div>
+        </div>
+        <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+          <div class="text-xs text-emerald-700">可更新</div>
+          <div class="mt-1 text-lg font-semibold text-emerald-800">可更新 {{ preview.valid_count }} 行</div>
+        </div>
+        <div class="rounded-md border border-amber-200 bg-amber-50 p-3">
+          <div class="text-xs text-amber-700">未匹配产品</div>
+          <div class="mt-1 text-lg font-semibold text-amber-800">{{ preview.missing_product_count }}</div>
+        </div>
+        <div class="rounded-md border border-red-200 bg-red-50 p-3">
+          <div class="text-xs text-red-700">错误行</div>
+          <div class="mt-1 text-lg font-semibold text-red-800">{{ preview.error_count }}</div>
+        </div>
+      </div>
+
+      {% if preview.blocked_fields %}
+        <div class="mx-4 mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          不允许修改的字段：{{ preview.blocked_fields | join("，") }}
+        </div>
+      {% endif %}
+
+      {% if import_token and not preview.blocked_fields and preview.missing_product_count == 0 and preview.error_count == 0 %}
+        <form class="mx-4 mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3" action="/products/import/commit" method="post">
+          <input type="hidden" name="import_token" value="{{ import_token }}">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div class="text-sm text-emerald-800">校验通过，可确认写入数据库。</div>
+            <button class="btn-primary" type="submit">确认写入</button>
+          </div>
+        </form>
+      {% endif %}
+
+      <div class="px-4 pb-5">
+        <h3 class="mb-2 text-sm font-semibold text-slate-900">可更新行预览</h3>
+        <div class="overflow-x-auto rounded-md border border-slate-200">
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-left text-xs font-semibold text-slate-500">
+              <tr>
+                <th class="table-head">行号</th>
+                <th class="table-head">店铺站点</th>
+                <th class="table-head">MSKU</th>
+                <th class="table-head">待更新字段</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white text-slate-700">
+              {% for row in preview.valid_rows %}
+                <tr>
+                  <td class="table-cell">{{ row.row_number }}</td>
+                  <td class="table-cell">{{ row.store_site }}</td>
+                  <td class="table-cell mono">{{ row.msku }}</td>
+                  <td class="table-cell">
+                    {% for field, value in row.changes.items() %}
+                      <span class="mr-2 inline-block">{{ field }}={{ value }}</span>
+                    {% endfor %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td class="px-4 py-6 text-center text-slate-500" colspan="4">暂无可更新行</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% if preview.missing_product_rows or preview.error_rows %}
+        <div class="grid gap-4 border-t border-slate-200 px-4 py-5 lg:grid-cols-2">
+          <div>
+            <h3 class="mb-2 text-sm font-semibold text-slate-900">未匹配产品</h3>
+            <div class="rounded-md border border-slate-200 bg-white">
+              {% for row in preview.missing_product_rows %}
+                <div class="border-b border-slate-100 px-3 py-2 text-sm last:border-b-0">
+                  第 {{ row.row_number }} 行：{{ row.store_site }} / {{ row.msku }}
+                </div>
+              {% else %}
+                <div class="px-3 py-3 text-sm text-slate-500">无</div>
+              {% endfor %}
+            </div>
+          </div>
+          <div>
+            <h3 class="mb-2 text-sm font-semibold text-slate-900">错误行</h3>
+            <div class="rounded-md border border-slate-200 bg-white">
+              {% for row in preview.error_rows %}
+                <div class="border-b border-slate-100 px-3 py-2 text-sm last:border-b-0">
+                  第 {{ row.row_number }} 行：{{ row.message }}
+                </div>
+              {% else %}
+                <div class="px-3 py-3 text-sm text-slate-500">无</div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endblock %}

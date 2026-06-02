@@ -93,7 +93,22 @@
   outline: none;
 }
 
-.field-input:focus {
+.field-textarea {
+  min-height: 132px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  padding: 10px;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.field-input:focus,
+.field-textarea:focus {
   border-color: #1e40af;
   box-shadow: 0 0 0 3px #dbeafe;
 }
@@ -111,4 +126,30 @@
 
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.detail-grid dt,
+.detail-list dt {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.detail-grid dd,
+.detail-list dd {
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.detail-list {
+  display: grid;
+  gap: 12px;
 }

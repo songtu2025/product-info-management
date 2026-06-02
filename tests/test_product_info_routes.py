@@ -89,3 +89,41 @@ def test_product_list_passes_search_and_filter_params(monkeypatch):
     assert captured["filters"].listing == "ListingA"
     assert captured["filters"].page == 2
     assert captured["filters"].page_size == 50
+
+
+def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
+    captured = {}
+
+    def fake_export_products(filters):
+        captured["filters"] = filters
+        return b"xlsx-bytes"
+
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.export_products_to_xlsx",
+        fake_export_products,
+    )
+
+    response = client.get(
+        "/products/export",
+        params={
+            "q": "abc",
+            "store_site": "SAYOLA:US",
+            "brand": "BrandA",
+            "sales_status": "在售",
+            "listing": "ListingA",
+            "page": "4",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"xlsx-bytes"
+    assert response.headers["content-type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert "attachment;" in response.headers["content-disposition"]
+    assert captured["filters"].q == "abc"
+    assert captured["filters"].store_site == "SAYOLA:US"
+    assert captured["filters"].brand == "BrandA"
+    assert captured["filters"].sales_status == "在售"
+    assert captured["filters"].listing == "ListingA"
+    assert captured["filters"].page == 1

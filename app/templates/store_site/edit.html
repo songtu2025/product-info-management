@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+
+{% macro value(text) -%}
+  {{ text if text not in [None, ""] else "" }}
+{%- endmacro %}
+
+{% block content %}
+  <div class="mb-4">
+    <a class="text-sm font-medium text-blue-800 hover:underline" href="/store-sites">返回店铺站点</a>
+    <h2 class="mt-2 text-xl font-semibold text-slate-950">编辑店铺站点</h2>
+    <p class="mt-1 text-sm text-slate-500">{{ row.store_site }}。该关联键暂不允许编辑。</p>
+  </div>
+
+  {% if error %}
+    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form class="content-panel" method="post">
+    <div class="grid gap-4 p-4 md:grid-cols-3">
+      <label class="field">
+        <span class="field-label">店铺</span>
+        <input class="field-input" name="store" value="{{ value(row.store) }}">
+      </label>
+      <label class="field">
+        <span class="field-label">国家</span>
+        <input class="field-input" name="country" value="{{ value(row.country) }}">
+      </label>
+      <label class="field">
+        <span class="field-label">域名</span>
+        <input class="field-input" name="domain" value="{{ value(row.domain) }}">
+      </label>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-4">
+      <a class="btn-secondary inline-flex items-center" href="/store-sites">取消</a>
+      <button class="btn-primary" type="submit">保存</button>
+    </div>
+  </form>
+{% endblock %}
