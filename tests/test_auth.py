@@ -153,7 +153,26 @@ def test_viewer_does_not_see_admin_navigation(monkeypatch):
     client.cookies.clear()
     monkeypatch.setattr(
         "app.modules.product_info.routes.list_products",
-        lambda filters: {"rows": [], "total": 0, "page": 1, "page_size": 50, "pages": 0},
+        lambda filters: {
+            "rows": [
+                {
+                    "id": 1,
+                    "msku": "MSKU-1",
+                    "asin": "B001",
+                    "store_site": "SAYOLA:US",
+                    "product_name": "Product 1",
+                    "sku": "SKU-1",
+                    "brand": "BrandA",
+                    "listing": "ListingA",
+                    "sales_status": "在售",
+                    "updated_at": None,
+                }
+            ],
+            "total": 1,
+            "page": 1,
+            "page_size": 50,
+            "pages": 1,
+        },
     )
     monkeypatch.setattr(
         "app.modules.product_info.routes.get_filter_options",
@@ -170,6 +189,10 @@ def test_viewer_does_not_see_admin_navigation(monkeypatch):
     assert response.status_code == 200
     assert "/admin-users" not in response.text
     assert "/products/import" not in response.text
+    assert 'href="/products/1">MSKU-1</a>' not in response.text
+    assert "/products/1" in response.text
+    assert "/operation-logs?table_name=amazon_product_info&amp;record_id=1" in response.text
+    assert "/products/1/edit" not in response.text
 
 
 def test_viewer_does_not_see_product_edit_entry(monkeypatch):

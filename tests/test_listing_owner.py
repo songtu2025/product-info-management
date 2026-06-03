@@ -36,6 +36,8 @@ def test_listing_owner_list_renders_rows(monkeypatch):
     assert "RB833" in response.text
     assert "张三" in response.text
     assert "/listing-owners/1/edit" in response.text
+    assert "日志" in response.text
+    assert "/operation-logs?table_name=amazon_listing_owner_config&amp;record_id=1" in response.text
 
 
 def test_listing_owner_edit_page_does_not_allow_key_edit(monkeypatch):
@@ -80,9 +82,10 @@ def test_listing_owner_edit_post_updates_and_redirects(monkeypatch):
         },
     )
 
-    def fake_update_listing_owner(row_id, payload):
+    def fake_update_listing_owner(row_id, payload, changed_by="system"):
         captured["row_id"] = row_id
         captured["payload"] = payload
+        captured["changed_by"] = changed_by
         return True
 
     monkeypatch.setattr(
@@ -114,6 +117,7 @@ def test_listing_owner_edit_post_updates_and_redirects(monkeypatch):
         "include_inventory_age_assessment": "否",
         "project_group": "项目组B",
     }
+    assert captured["changed_by"] == "test-admin"
 
 
 def test_build_listing_owner_update_payload_keeps_only_editable_fields():

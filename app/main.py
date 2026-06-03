@@ -7,6 +7,7 @@ from app.core.db import check_database_connection
 from app.core.security import auth_middleware
 from app.modules.admin_user.routes import router as admin_user_router
 from app.modules.auth.routes import router as auth_router
+from app.modules.data_quality.routes import router as data_quality_router
 from app.modules.listing_owner.routes import router as listing_owner_router
 from app.modules.operation_log.routes import router as operation_log_router
 from app.modules.product_import.routes import router as product_import_router
@@ -22,6 +23,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth_router)
 app.include_router(product_import_router)
 app.include_router(product_info_router)
+app.include_router(data_quality_router)
 app.include_router(store_site_router)
 app.include_router(listing_owner_router)
 app.include_router(operation_log_router)

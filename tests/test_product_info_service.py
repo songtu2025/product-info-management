@@ -4,6 +4,7 @@ from app.modules.product_info import service
 from app.modules.product_info.service import (
     ProductFilters,
     _build_where,
+    list_products,
     list_products_for_export,
     normalize_filters,
 )
@@ -56,6 +57,68 @@ def test_build_where_supports_search_and_exact_filters():
         "sales_status": "在售",
         "listing": "ListingA",
     }
+
+
+def test_list_products_returns_all_product_table_fields(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    asin TEXT,
+                    msku TEXT,
+                    store_site TEXT,
+                    parent_asin TEXT,
+                    product_name TEXT,
+                    sku TEXT,
+                    brand TEXT,
+                    fnsku TEXT,
+                    sales_status TEXT,
+                    storage_type TEXT,
+                    category_level_1 TEXT,
+                    category_a TEXT,
+                    category_b TEXT,
+                    listing TEXT,
+                    label_name TEXT,
+                    msku_shipping_remark TEXT,
+                    transfer_remark TEXT,
+                    msku_lock_status TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, asin, msku, store_site, parent_asin, product_name, sku, brand,
+                    fnsku, sales_status, storage_type, category_level_1, category_a,
+                    category_b, listing, label_name, msku_shipping_remark,
+                    transfer_remark, msku_lock_status, created_at, updated_at
+                )
+                VALUES (
+                    1, 'B001', 'MSKU-001', 'SAYOLA:US', 'PARENT001', 'Product A',
+                    'SKU-001', 'BrandA', 'FNSKU-001', '在售', 'FBA', '服饰',
+                    '眼镜', '太阳镜', 'RB833', '标签', '发货备注',
+                    '借调备注', '否', '2026-06-01', '2026-06-02'
+                )
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    rows = list_products(ProductFilters())["rows"]
+
+    assert rows[0]["parent_asin"] == "PARENT001"
+    assert rows[0]["fnsku"] == "FNSKU-001"
+    assert rows[0]["label_name"] == "标签"
+    assert rows[0]["msku_shipping_remark"] == "发货备注"
+    assert rows[0]["created_at"] == "2026-06-01"
 
 
 def test_list_products_for_export_uses_filters_without_pagination(monkeypatch):

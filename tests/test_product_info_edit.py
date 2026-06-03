@@ -1,7 +1,11 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.modules.product_info.service import build_create_payload, build_update_payload
+from app.modules.product_info.service import (
+    DuplicateProductError,
+    build_create_payload,
+    build_update_payload,
+)
 
 
 client = TestClient(app)
@@ -46,12 +50,23 @@ def test_product_edit_page_renders_allowed_fields(monkeypatch):
     assert "name=\"store_site\"" not in response.text
 
 
-def test_product_new_page_renders_create_fields():
+def test_product_new_page_renders_create_fields(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_store_sites",
+        lambda: [
+            {"store_site": "SAYOLA:US"},
+            {"store_site": "RIVBOS:CA"},
+        ],
+    )
+
     response = client.get("/products/new")
 
     assert response.status_code == 200
     assert "新增产品信息" in response.text
+    assert "<select" in response.text
     assert "name=\"store_site\"" in response.text
+    assert "SAYOLA:US" in response.text
+    assert "RIVBOS:CA" in response.text
     assert "name=\"msku\"" in response.text
     assert "name=\"asin\"" in response.text
     assert "name=\"listing\"" in response.text
@@ -94,13 +109,40 @@ def test_product_new_post_creates_and_redirects(monkeypatch):
     }
 
 
+def test_product_new_post_shows_duplicate_product_error(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_store_sites",
+        lambda: [
+            {"store_site": "SAYOLA:US"},
+            {"store_site": "RIVBOS:CA"},
+        ],
+    )
+
+    def fake_create_product(payload, changed_by="system"):
+        raise DuplicateProductError
+
+    monkeypatch.setattr("app.modules.product_info.routes.create_product", fake_create_product)
+
+    response = client.post(
+        "/products/new",
+        data={"store_site": "SAYOLA:US", "msku": "MSKU-001"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "该店铺站点下 MSKU 已存在" in response.text
+    assert '<option value="SAYOLA:US" selected>SAYOLA:US</option>' in response.text
+    assert "MSKU-001" in response.text
+
+
 def test_product_edit_post_updates_and_redirects(monkeypatch):
     captured = {}
     monkeypatch.setattr("app.modules.product_info.routes.get_product_detail", fake_detail)
 
-    def fake_update_product(product_id, payload):
+    def fake_update_product(product_id, payload, changed_by="system"):
         captured["product_id"] = product_id
         captured["payload"] = payload
+        captured["changed_by"] = changed_by
         return True
 
     monkeypatch.setattr("app.modules.product_info.routes.update_product", fake_update_product)
@@ -128,6 +170,7 @@ def test_product_edit_post_updates_and_redirects(monkeypatch):
     assert response.headers["location"] == "/products/7"
     assert captured["product_id"] == 7
     assert captured["payload"]["product_name"] == "New Product"
+    assert captured["changed_by"] == "test-admin"
     assert "msku" not in captured["payload"]
 
 

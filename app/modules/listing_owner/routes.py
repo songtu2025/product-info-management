@@ -51,14 +51,14 @@ def listing_owner_edit(request: Request, row_id: int):
 
 @router.post("/{row_id}/edit")
 async def listing_owner_update(request: Request, row_id: int):
-    require_admin(request)
+    user = require_admin(request)
     row = get_listing_owner(row_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Listing owner not found")
 
     form = await request.form()
     payload = build_update_payload(dict(form))
-    if update_listing_owner(row_id, payload):
+    if update_listing_owner(row_id, payload, changed_by=user.username):
         return RedirectResponse("/listing-owners", status_code=303)
 
     row.update(payload)

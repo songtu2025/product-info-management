@@ -7,27 +7,35 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900">
+  <body class="min-h-screen text-slate-900">
     {% set current_user = request.session.get("user") %}
-    <div class="flex min-h-screen">
-      <aside class="hidden w-64 shrink-0 border-r border-slate-200 bg-white lg:block">
-        <div class="border-b border-slate-200 px-6 py-5">
-          <div class="text-sm font-semibold text-blue-800">Amazon Ops</div>
-          <div class="mt-1 text-xs text-slate-500">运营数据管理后台</div>
+    <div class="app-shell flex min-h-screen">
+      <aside class="app-sidebar hidden w-64 shrink-0 lg:block">
+        <div class="border-b border-slate-200 px-5 py-5">
+          <div class="flex items-center gap-3">
+            <div class="brand-mark">AO</div>
+            <div>
+              <div class="text-sm font-bold text-slate-950">Amazon Ops</div>
+              <div class="mt-1 text-xs font-medium text-slate-500">运营数据管理后台</div>
+            </div>
+          </div>
         </div>
         <nav class="space-y-1 px-3 py-4">
+          <div class="nav-section-label">核心模块</div>
           {% for item in [
-            {"label": "产品信息", "href": "/"},
-            {"label": "店铺站点", "href": "/store-sites"},
-            {"label": "Listing 负责人", "href": "/listing-owners"},
-            {"label": "操作日志", "href": "/operation-logs"},
-            {"label": "用户管理", "href": "/admin-users", "admin_only": true},
-            {"label": "数据导入", "href": "/products/import", "admin_only": true},
-            {"label": "后续模块预留", "href": "#"}
+            {"label": "产品信息", "href": "/", "icon": "PI"},
+            {"label": "数据质量", "href": "/data-quality", "icon": "DQ"},
+            {"label": "店铺站点", "href": "/store-sites", "icon": "SS"},
+            {"label": "Listing 负责人", "href": "/listing-owners", "icon": "LO"},
+            {"label": "操作日志", "href": "/operation-logs", "icon": "LOG"},
+            {"label": "用户管理", "href": "/admin-users", "icon": "AU", "admin_only": true},
+            {"label": "数据导入", "href": "/products/import", "icon": "IM", "admin_only": true},
+            {"label": "后续模块预留", "href": "#", "icon": "--"}
           ] %}
             {% if not item.admin_only or (current_user and current_user.role == "admin") %}
               <a class="nav-link {% if item.label == active_nav %}nav-link-active{% endif %}" href="{{ item.href }}">
-                {{ item.label }}
+                <span class="nav-icon">{{ item.icon }}</span>
+                <span>{{ item.label }}</span>
               </a>
             {% endif %}
           {% endfor %}
@@ -35,32 +43,25 @@
       </aside>
 
       <main class="flex min-w-0 flex-1 flex-col">
-        <header class="border-b border-slate-200 bg-white">
+        <header class="app-header">
           <div class="flex min-h-16 items-center justify-between gap-4 px-5 py-3">
             <div>
-              <h1 class="text-lg font-semibold text-slate-950">{{ app_name }}</h1>
-              <p class="mt-1 text-sm text-slate-500">产品信息管理模块</p>
+              <p class="page-kicker">{{ active_nav|default("产品信息") }}</p>
+              <h1 class="mt-1 text-lg font-bold text-slate-950">{{ app_name }}</h1>
             </div>
             <div class="hidden items-center gap-2 md:flex">
-              <input
-                class="h-10 w-72 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
-                type="search"
-                placeholder="搜索 MSKU / ASIN / Listing"
-              >
               {% if export_url is defined %}
                 <a class="btn-secondary" href="{{ export_url }}">导出</a>
-              {% else %}
-                <button class="btn-secondary" type="button">导出</button>
               {% endif %}
               {% if create_url is defined and (request.app.state.disable_auth or (current_user and current_user.role == "admin")) %}
                 <a class="btn-primary" href="{{ create_url }}">新增</a>
               {% endif %}
               {% if current_user %}
-                <div class="ml-2 border-l border-slate-200 pl-3 text-right text-xs leading-5 text-slate-500">
+                <div class="user-chip ml-2 text-right text-xs leading-5 text-slate-500">
                   <div class="font-semibold text-slate-800">{{ current_user.username }}</div>
                   <div>{{ current_user.role }}</div>
                 </div>
-                <a class="btn-secondary" href="/logout">退出登录</a>
+                <a class="btn-ghost" href="/logout">退出登录</a>
               {% endif %}
             </div>
           </div>

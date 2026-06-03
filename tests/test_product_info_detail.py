@@ -15,15 +15,23 @@ def test_product_detail_renders_product_store_and_owner(monkeypatch):
                 "msku": "MSKU-001",
                 "asin": "B012345678",
                 "store_site": "SAYOLA:US",
+                "parent_asin": "B0PARENT",
                 "product_name": "Test Product",
                 "sku": "SKU-001",
                 "brand": "BrandA",
+                "fnsku": "FNSKU-001",
                 "listing": "ListingA",
                 "sales_status": "在售",
+                "storage_type": "FBA",
+                "category_level_1": "服饰",
+                "category_a": "眼镜",
+                "category_b": "太阳镜",
                 "label_name": "核心款",
                 "msku_shipping_remark": "发货备注",
                 "transfer_remark": "借调备注",
                 "msku_lock_status": "否",
+                "created_at": "2026-06-01 10:00:00",
+                "updated_at": "2026-06-02 10:00:00",
             },
             "store_site": {
                 "store_site": "SAYOLA:US",
@@ -44,11 +52,19 @@ def test_product_detail_renders_product_store_and_owner(monkeypatch):
     response = client.get("/products/7")
 
     assert response.status_code == 200
+    assert "关键定位字段" in response.text
+    assert "基础信息" in response.text
+    assert "运营维护" in response.text
+    assert "备注信息" in response.text
     assert "MSKU-001" in response.text
     assert "Test Product" in response.text
+    assert "FNSKU-001" in response.text
+    assert "太阳镜" in response.text
     assert "amazon.com" in response.text
     assert "张三" in response.text
     assert "发货备注" in response.text
+    assert "查看操作日志" in response.text
+    assert "/operation-logs?table_name=amazon_product_info&amp;record_id=7" in response.text
 
 
 def test_product_detail_returns_404_when_missing(monkeypatch):

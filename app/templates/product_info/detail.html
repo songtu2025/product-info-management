@@ -15,35 +15,57 @@
       <h2 class="mt-2 text-xl font-semibold text-slate-950">{{ value(product.msku) }}</h2>
       <p class="mt-1 text-sm text-slate-500">{{ value(product.product_name) }}</p>
     </div>
-    {% if request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
-      <a class="btn-primary inline-flex items-center justify-center" href="/products/{{ product.id }}/edit">编辑</a>
-    {% endif %}
+    <div class="flex items-center gap-2">
+      <a class="btn-secondary inline-flex items-center justify-center" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ product.id }}">查看操作日志</a>
+      {% if request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
+        <a class="btn-primary inline-flex items-center justify-center" href="/products/{{ product.id }}/edit">编辑</a>
+      {% endif %}
+    </div>
   </div>
 
   <div class="grid gap-4 xl:grid-cols-3">
-    <section class="content-panel xl:col-span-2">
-      <div class="border-b border-slate-200 px-4 py-4">
-        <h3 class="text-base font-semibold text-slate-950">产品完整信息</h3>
-      </div>
-      <dl class="detail-grid p-4">
-        <div><dt>MSKU</dt><dd>{{ value(product.msku) }}</dd></div>
-        <div><dt>ASIN</dt><dd class="mono">{{ value(product.asin) }}</dd></div>
-        <div><dt>父 ASIN</dt><dd class="mono">{{ value(product.parent_asin) }}</dd></div>
-        <div><dt>SKU</dt><dd class="mono">{{ value(product.sku) }}</dd></div>
-        <div><dt>FNSKU</dt><dd class="mono">{{ value(product.fnsku) }}</dd></div>
-        <div><dt>店铺站点</dt><dd>{{ value(product.store_site) }}</dd></div>
-        <div><dt>品牌</dt><dd>{{ value(product.brand) }}</dd></div>
-        <div><dt>Listing</dt><dd>{{ value(product.listing) }}</dd></div>
-        <div><dt>销售状态</dt><dd>{{ value(product.sales_status) }}</dd></div>
-        <div><dt>仓储类型</dt><dd>{{ value(product.storage_type) }}</dd></div>
-        <div><dt>一级品类</dt><dd>{{ value(product.category_level_1) }}</dd></div>
-        <div><dt>品类 A</dt><dd>{{ value(product.category_a) }}</dd></div>
-        <div><dt>品类 B</dt><dd>{{ value(product.category_b) }}</dd></div>
-        <div><dt>锁仓 MSKU</dt><dd>{{ value(product.msku_lock_status) }}</dd></div>
-        <div><dt>创建时间</dt><dd>{{ value(product.created_at) }}</dd></div>
-        <div><dt>更新时间</dt><dd>{{ value(product.updated_at) }}</dd></div>
-      </dl>
-    </section>
+    <div class="space-y-4 xl:col-span-2">
+      <section class="content-panel">
+        <div class="border-b border-slate-200 px-4 py-4">
+          <h3 class="text-base font-semibold text-slate-950">关键定位字段</h3>
+        </div>
+        <dl class="detail-grid p-4">
+          <div><dt>店铺站点</dt><dd>{{ value(product.store_site) }}</dd></div>
+          <div><dt>MSKU</dt><dd>{{ value(product.msku) }}</dd></div>
+          <div><dt>Listing</dt><dd>{{ value(product.listing) }}</dd></div>
+        </dl>
+      </section>
+
+      <section class="content-panel">
+        <div class="border-b border-slate-200 px-4 py-4">
+          <h3 class="text-base font-semibold text-slate-950">基础信息</h3>
+        </div>
+        <dl class="detail-grid p-4">
+          <div><dt>ASIN</dt><dd class="mono">{{ value(product.asin) }}</dd></div>
+          <div><dt>父 ASIN</dt><dd class="mono">{{ value(product.parent_asin) }}</dd></div>
+          <div><dt>FNSKU</dt><dd class="mono">{{ value(product.fnsku) }}</dd></div>
+          <div><dt>SKU</dt><dd class="mono">{{ value(product.sku) }}</dd></div>
+          <div><dt>产品名称</dt><dd>{{ value(product.product_name) }}</dd></div>
+          <div><dt>品牌</dt><dd>{{ value(product.brand) }}</dd></div>
+        </dl>
+      </section>
+
+      <section class="content-panel">
+        <div class="border-b border-slate-200 px-4 py-4">
+          <h3 class="text-base font-semibold text-slate-950">运营维护</h3>
+        </div>
+        <dl class="detail-grid p-4">
+          <div><dt>销售状态</dt><dd>{{ value(product.sales_status) }}</dd></div>
+          <div><dt>仓储类型</dt><dd>{{ value(product.storage_type) }}</dd></div>
+          <div><dt>一级品类</dt><dd>{{ value(product.category_level_1) }}</dd></div>
+          <div><dt>品类 A</dt><dd>{{ value(product.category_a) }}</dd></div>
+          <div><dt>品类 B</dt><dd>{{ value(product.category_b) }}</dd></div>
+          <div><dt>锁仓 MSKU</dt><dd>{{ value(product.msku_lock_status) }}</dd></div>
+          <div><dt>创建时间</dt><dd>{{ value(product.created_at) }}</dd></div>
+          <div><dt>更新时间</dt><dd>{{ value(product.updated_at) }}</dd></div>
+        </dl>
+      </section>
+    </div>
 
     <aside class="space-y-4">
       <section class="content-panel">

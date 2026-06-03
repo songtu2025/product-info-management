@@ -72,7 +72,7 @@ async def product_import_preview(request: Request, file: UploadFile = File(...))
 
 @router.post("/products/import/commit", response_class=HTMLResponse)
 async def product_import_commit(request: Request, import_token: str = Form(...)):
-    require_admin(request)
+    user = require_admin(request)
     content = load_import_upload(import_token)
     if content is None:
         commit_result = {
@@ -82,7 +82,7 @@ async def product_import_commit(request: Request, import_token: str = Form(...))
             "message": "导入文件已失效，请重新上传。",
         }
     else:
-        commit_result = commit_product_import(content)
+        commit_result = commit_product_import(content, changed_by=user.username)
 
     return templates.TemplateResponse(
         request,

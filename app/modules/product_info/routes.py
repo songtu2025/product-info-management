@@ -5,7 +5,9 @@ from app.core.config import get_settings
 from app.core.security import require_admin
 from app.core.templates import templates
 from app.modules.product_info.service import (
+    DuplicateProductError,
     ProductFilters,
+    PRODUCT_LIST_COLUMNS,
     build_create_payload,
     build_update_payload,
     create_product,
@@ -15,9 +17,20 @@ from app.modules.product_info.service import (
     list_products,
     update_product,
 )
+from app.modules.store_site.service import list_store_sites
 
 
 router = APIRouter()
+
+
+def build_product_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
+    return {
+        "app_name": get_settings().app_name,
+        "active_nav": "产品信息",
+        "row": row or {},
+        "store_sites": list_store_sites(),
+        "error": error,
+    }
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -49,6 +62,7 @@ def product_list(
             "active_nav": "产品信息",
             "filters": filters,
             "products": products,
+            "product_list_columns": PRODUCT_LIST_COLUMNS,
             "options": options,
             "export_url": "/products/export"
             + (f"?{request.url.query}" if request.url.query else ""),
@@ -87,12 +101,7 @@ def product_new(request: Request):
     return templates.TemplateResponse(
         request,
         "product_info/new.html",
-        {
-            "app_name": get_settings().app_name,
-            "active_nav": "产品信息",
-            "row": {},
-            "error": None,
-        },
+        build_product_new_context(),
     )
 
 
@@ -101,19 +110,29 @@ async def product_create(request: Request):
     user = require_admin(request)
     form = await request.form()
     payload = build_create_payload(dict(form))
-    product_id = create_product(payload, changed_by=user.username)
+    try:
+        product_id = create_product(payload, changed_by=user.username)
+    except DuplicateProductError:
+        return templates.TemplateResponse(
+            request,
+            "product_info/new.html",
+            build_product_new_context(
+                payload,
+                "该店铺站点下 MSKU 已存在，请检查后再新增。",
+            ),
+            status_code=400,
+        )
+
     if product_id:
         return RedirectResponse(f"/products/{product_id}", status_code=303)
 
     return templates.TemplateResponse(
         request,
         "product_info/new.html",
-        {
-            "app_name": get_settings().app_name,
-            "active_nav": "产品信息",
-            "row": payload,
-            "error": "保存失败，请至少填写店铺站点和 MSKU，并确认没有重复产品。",
-        },
+        build_product_new_context(
+            payload,
+            "保存失败，请至少填写店铺站点和 MSKU，并确认没有重复产品。",
+        ),
         status_code=400,
     )
 
@@ -156,14 +175,14 @@ def product_edit(request: Request, product_id: int):
 
 @router.post("/products/{product_id}/edit")
 async def product_update(request: Request, product_id: int):
-    require_admin(request)
+    user = require_admin(request)
     detail = get_product_detail(product_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Product not found")
 
     form = await request.form()
     payload = build_update_payload(dict(form))
-    if update_product(product_id, payload):
+    if update_product(product_id, payload, changed_by=user.username):
         return RedirectResponse(f"/products/{product_id}", status_code=303)
 
     detail["product"].update(payload)

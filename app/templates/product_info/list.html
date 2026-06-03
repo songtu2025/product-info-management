@@ -1,120 +1,506 @@
 {% extends "layout.html" %}
 
 {% block content %}
-  <form class="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:grid-cols-6" method="get">
-    <label class="field lg:col-span-2">
-      <span class="field-label">关键词</span>
-      <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="MSKU / ASIN / SKU / Listing">
-    </label>
+  {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
+  <form class="filter-panel mb-4" method="get">
+    <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h2 class="text-base font-bold text-slate-950">筛选产品</h2>
+        <p class="mt-1 text-sm text-slate-500">按运营常用维度缩小列表范围。</p>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn-primary" type="submit">查询</button>
+        <a class="btn-secondary" href="/">重置</a>
+      </div>
+    </div>
 
-    <label class="field">
-      <span class="field-label">店铺站点</span>
-      <select class="field-input" name="store_site">
-        <option value="">全部</option>
-        {% for value in options.store_sites %}
-          <option value="{{ value }}" {% if filters.store_site == value %}selected{% endif %}>{{ value }}</option>
-        {% endfor %}
-      </select>
-    </label>
+    <div class="grid gap-3 lg:grid-cols-6">
+      <label class="field lg:col-span-2">
+        <span class="field-label">关键词</span>
+        <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="MSKU / ASIN / SKU / Listing">
+      </label>
 
-    <label class="field">
-      <span class="field-label">品牌</span>
-      <select class="field-input" name="brand">
-        <option value="">全部</option>
-        {% for value in options.brands %}
-          <option value="{{ value }}" {% if filters.brand == value %}selected{% endif %}>{{ value }}</option>
-        {% endfor %}
-      </select>
-    </label>
+      <label class="field">
+        <span class="field-label">店铺站点</span>
+        <select class="field-input" name="store_site">
+          <option value="">全部</option>
+          {% for value in options.store_sites %}
+            <option value="{{ value }}" {% if filters.store_site == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
 
-    <label class="field">
-      <span class="field-label">销售状态</span>
-      <select class="field-input" name="sales_status">
-        <option value="">全部</option>
-        {% for value in options.sales_statuses %}
-          <option value="{{ value }}" {% if filters.sales_status == value %}selected{% endif %}>{{ value }}</option>
-        {% endfor %}
-      </select>
-    </label>
+      <label class="field">
+        <span class="field-label">品牌</span>
+        <select class="field-input" name="brand">
+          <option value="">全部</option>
+          {% for value in options.brands %}
+            <option value="{{ value }}" {% if filters.brand == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
 
-    <label class="field">
-      <span class="field-label">Listing</span>
-      <select class="field-input" name="listing">
-        <option value="">全部</option>
-        {% for value in options.listings %}
-          <option value="{{ value }}" {% if filters.listing == value %}selected{% endif %}>{{ value }}</option>
-        {% endfor %}
-      </select>
-    </label>
+      <label class="field">
+        <span class="field-label">销售状态</span>
+        <select class="field-input" name="sales_status">
+          <option value="">全部</option>
+          {% for value in options.sales_statuses %}
+            <option value="{{ value }}" {% if filters.sales_status == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
 
-    <div class="flex items-end gap-2 lg:col-span-6">
-      <button class="btn-primary" type="submit">查询</button>
-      <a class="btn-secondary inline-flex items-center" href="/">重置</a>
+      <label class="field">
+        <span class="field-label">Listing</span>
+        <select class="field-input" name="listing">
+          <option value="">全部</option>
+          {% for value in options.listings %}
+            <option value="{{ value }}" {% if filters.listing == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
   </form>
 
   <div class="content-panel">
-    <div class="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 md:flex-row md:items-center md:justify-between">
+    <div class="panel-heading flex-col items-start md:flex-row md:items-center">
       <div>
-        <h2 class="text-base font-semibold text-slate-950">产品信息</h2>
-        <p class="mt-1 text-sm text-slate-500">
+        <h2 class="panel-title">产品信息</h2>
+        <p class="panel-subtitle">
           共 {{ products.total }} 条，每页 {{ products.page_size }} 行，当前第 {{ products.page }} 页
         </p>
       </div>
-      <div class="text-sm text-slate-500">列表页不加载长文本备注字段</div>
+      <div class="flex flex-col gap-2 text-sm text-slate-500 md:items-end">
+        <button
+          class="btn-secondary"
+          data-column-settings-button
+          type="button"
+          aria-expanded="false"
+          aria-controls="product-column-settings"
+        >字段设置</button>
+        <span>长文本和系统字段默认隐藏，可按需打开。</span>
+      </div>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50 text-left text-xs font-semibold text-slate-500">
+    <div
+      class="field-settings-panel hidden"
+      id="product-column-settings"
+      data-column-settings-panel
+    >
+      <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div class="text-sm font-bold text-slate-900">列表字段</div>
+          <div class="mt-1 text-xs text-slate-500">勾选控制显示，拖拽调整顺序，列宽会保存在当前浏览器。</div>
+        </div>
+        <button class="btn-secondary" data-column-reset type="button">重置字段</button>
+      </div>
+      <div class="field-settings-list" data-column-settings-list>
+        {% for column in product_list_columns %}
+          <div
+            class="field-settings-item"
+            data-column-setting-item="{{ column.key }}"
+            draggable="true"
+          >
+            <span
+              class="drag-handle"
+              data-column-drag-handle="{{ column.key }}"
+              title="拖拽调整顺序"
+            >拖动</span>
+            <label class="inline-flex min-w-0 flex-1 items-center gap-2">
+              <input
+                class="h-4 w-4"
+                data-column-toggle="{{ column.key }}"
+                data-default-visible="{{ 'true' if column.default_visible else 'false' }}"
+                type="checkbox"
+                {% if column.default_visible %}checked{% endif %}
+              >
+              <span class="truncate">{{ column.label }}</span>
+            </label>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table table-fixed text-sm" data-product-list-table>
+        <colgroup>
+          {% for column in product_list_columns %}
+            <col data-column="{{ column.key }}">
+          {% endfor %}
+          <col data-column="actions">
+        </colgroup>
+        <thead class="text-left">
           <tr>
-            <th class="table-head">MSKU</th>
-            <th class="table-head">ASIN</th>
-            <th class="table-head">店铺站点</th>
-            <th class="table-head">产品名称</th>
-            <th class="table-head">SKU</th>
-            <th class="table-head">品牌</th>
-            <th class="table-head">Listing</th>
-            <th class="table-head">销售状态</th>
-            <th class="table-head">更新时间</th>
+            {% for column in product_list_columns %}
+              <th class="table-head relative" data-column="{{ column.key }}" data-default-visible="{{ 'true' if column.default_visible else 'false' }}">
+                <div class="flex items-center justify-between gap-2">
+                  <span>{{ column.label }}</span>
+                  <span
+                    class="resize-handle"
+                    data-resize-column="{{ column.key }}"
+                    title="拖动调整列宽"
+                  ></span>
+                </div>
+              </th>
+            {% endfor %}
+            <th class="table-head" data-column="actions">操作</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100 bg-white text-slate-700">
+        <tbody>
           {% for row in products.rows %}
-            <tr class="hover:bg-blue-50/60">
-              <td class="table-cell font-medium text-blue-800">
-                <a class="hover:underline" href="/products/{{ row.id }}">{{ row.msku or "-" }}</a>
+            <tr class="table-row">
+              {% for column in product_list_columns %}
+                <td
+                  class="table-cell truncate {% if column.key in ['id', 'asin', 'msku', 'sku', 'fnsku'] %}mono{% endif %} {% if column.key == 'msku' %}font-medium text-slate-950{% endif %}"
+                  data-column="{{ column.key }}"
+                  data-default-visible="{{ 'true' if column.default_visible else 'false' }}"
+                  title="{{ row.get(column.key) or '' }}"
+                >
+                  {% if column.key in ["sales_status", "msku_lock_status"] and row.get(column.key) %}
+                    <span class="status-badge">{{ row.get(column.key) }}</span>
+                  {% else %}
+                    {{ row.get(column.key) or "-" }}
+                  {% endif %}
+                </td>
+              {% endfor %}
+              <td class="table-cell" data-column="actions">
+                <div class="row-actions">
+                  <a class="action-link" href="/products/{{ row.id }}">详情</a>
+                  <a class="action-link" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ row.id }}">日志</a>
+                  {% if can_edit %}
+                    <a class="action-link" href="/products/{{ row.id }}/edit">编辑</a>
+                  {% endif %}
+                </div>
               </td>
-              <td class="table-cell mono">{{ row.asin or "-" }}</td>
-              <td class="table-cell">{{ row.store_site or "-" }}</td>
-              <td class="table-cell max-w-xs truncate" title="{{ row.product_name or '' }}">{{ row.product_name or "-" }}</td>
-              <td class="table-cell mono">{{ row.sku or "-" }}</td>
-              <td class="table-cell">{{ row.brand or "-" }}</td>
-              <td class="table-cell">{{ row.listing or "-" }}</td>
-              <td class="table-cell">{{ row.sales_status or "-" }}</td>
-              <td class="table-cell">{{ row.updated_at or "-" }}</td>
             </tr>
           {% else %}
             <tr>
-              <td class="px-4 py-8 text-center text-slate-500" colspan="9">没有匹配的产品数据</td>
+              <td class="px-4 py-8 text-center text-slate-500" colspan="{{ product_list_columns|length + 1 }}">没有匹配的产品数据</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
 
-    <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm">
+    <div class="flex items-center justify-between px-4 py-3 text-sm">
       {% set prev_page = products.page - 1 %}
       {% set next_page = products.page + 1 %}
       <a
-        class="btn-secondary inline-flex items-center {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
+        class="btn-secondary {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
         href="?q={{ filters.q or '' }}&store_site={{ filters.store_site or '' }}&brand={{ filters.brand or '' }}&sales_status={{ filters.sales_status or '' }}&listing={{ filters.listing or '' }}&page={{ prev_page }}"
       >上一页</a>
       <span class="text-slate-500">第 {{ products.page }} / {{ products.pages if products.pages else 1 }} 页</span>
       <a
-        class="btn-secondary inline-flex items-center {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
+        class="btn-secondary {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
         href="?q={{ filters.q or '' }}&store_site={{ filters.store_site or '' }}&brand={{ filters.brand or '' }}&sales_status={{ filters.sales_status or '' }}&listing={{ filters.listing or '' }}&page={{ next_page }}"
       >下一页</a>
     </div>
   </div>
+
+  <script>
+    (() => {
+      const storageKey = "productListColumnState";
+      const table = document.querySelector("table");
+      const settingsButton = document.querySelector("[data-column-settings-button]");
+      const settingsPanel = document.querySelector("[data-column-settings-panel]");
+      const settingsList = document.querySelector("[data-column-settings-list]");
+      const resetButton = document.querySelector("[data-column-reset]");
+      const allKeys = Array.from(document.querySelectorAll("[data-column-toggle]")).map((toggle) => toggle.dataset.columnToggle);
+      const resizers = Array.from(document.querySelectorAll("[data-resize-column]"));
+      const widthWeights = {
+        id: 0.5,
+        product_name: 1.8,
+        label_name: 1.8,
+        msku_shipping_remark: 2,
+        transfer_remark: 1.6,
+        created_at: 1.2,
+        updated_at: 1.2,
+      };
+
+      if (!table || !settingsButton || !settingsPanel || !settingsList) {
+        return;
+      }
+
+      const readState = () => {
+        try {
+          return JSON.parse(localStorage.getItem(storageKey)) || {};
+        } catch (error) {
+          return {};
+        }
+      };
+
+      let state = readState();
+
+      const saveState = () => {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+      };
+
+      const applyColumnVisibility = (key, visible) => {
+        document.querySelectorAll(`[data-column="${key}"]`).forEach((element) => {
+          element.classList.toggle("hidden", !visible);
+        });
+      };
+
+      const applyColumnWidth = (key, width) => {
+        const nextWidth = `${width}px`;
+        document.querySelectorAll(`[data-column="${key}"]`).forEach((element) => {
+          element.style.width = nextWidth;
+          element.style.minWidth = nextWidth;
+        });
+      };
+
+      const isColumnVisible = (key) => {
+        const toggle = document.querySelector(`[data-column-toggle="${key}"]`);
+        const defaultVisible = toggle?.dataset.defaultVisible !== "false";
+        return state.visible?.[key] ?? defaultVisible;
+      };
+
+      const clearColumnWidth = (key) => {
+        document.querySelectorAll(`[data-column="${key}"]`).forEach((element) => {
+          element.style.width = "";
+          element.style.minWidth = "";
+        });
+      };
+
+      const autoFitColumnWidths = () => {
+        const visibleKeys = orderedKeys().filter((key) => isColumnVisible(key));
+        if (!visibleKeys.length) {
+          return;
+        }
+
+        allKeys.forEach((key) => {
+          if (!state.widths?.[key]) {
+            clearColumnWidth(key);
+          }
+        });
+
+        const containerWidth = table.parentElement?.clientWidth || table.getBoundingClientRect().width || 960;
+        const actionsWidth = 132;
+        const availableWidth = Math.max(containerWidth - actionsWidth, 240);
+        const manualWidths = state.widths || {};
+        const manualTotal = visibleKeys.reduce((total, key) => total + (Number(manualWidths[key]) || 0), 0);
+        const autoKeys = visibleKeys.filter((key) => !manualWidths[key]);
+        const autoWeightTotal = autoKeys.reduce((total, key) => total + (widthWeights[key] || 1), 0) || 1;
+        const shouldFitScreen = visibleKeys.length <= 10;
+        const minAutoWidth = shouldFitScreen ? 88 : 96;
+        const baseAutoWidth = shouldFitScreen
+          ? Math.max(availableWidth - manualTotal, autoKeys.length * minAutoWidth)
+          : Math.max(availableWidth - manualTotal, autoKeys.length * minAutoWidth);
+        let assignedWidth = actionsWidth;
+
+        visibleKeys.forEach((key) => {
+          const manualWidth = Number(manualWidths[key]);
+          if (manualWidth >= 40) {
+            applyColumnWidth(key, manualWidth);
+            assignedWidth += manualWidth;
+            return;
+          }
+
+          const width = Math.max(
+            minAutoWidth,
+            Math.round(baseAutoWidth * ((widthWeights[key] || 1) / autoWeightTotal)),
+          );
+          applyColumnWidth(key, width);
+          assignedWidth += width;
+        });
+
+        table.style.width = `${Math.max(containerWidth, Math.ceil(assignedWidth))}px`;
+      };
+
+      const orderedKeys = () => {
+        const saved = Array.isArray(state.order) ? state.order : [];
+        return [
+          ...saved.filter((key) => allKeys.includes(key)),
+          ...allKeys.filter((key) => !saved.includes(key)),
+        ];
+      };
+
+      const reorderColumns = () => {
+        const order = orderedKeys();
+        const colGroup = table.querySelector("colgroup");
+        const headerRow = table.querySelector("thead tr");
+        const rows = Array.from(table.querySelectorAll("tbody tr"));
+
+        order.forEach((key) => {
+          const settingItem = document.querySelector(`[data-column-setting-item="${key}"]`);
+          if (settingItem) {
+            settingsList.appendChild(settingItem);
+          }
+
+          const column = colGroup?.querySelector(`col[data-column="${key}"]`);
+          const actionsColumn = colGroup?.querySelector('col[data-column="actions"]');
+          if (column && actionsColumn) {
+            colGroup.insertBefore(column, actionsColumn);
+          }
+
+          const header = headerRow?.querySelector(`th[data-column="${key}"]`);
+          const actionsHeader = headerRow?.querySelector('th[data-column="actions"]');
+          if (header && actionsHeader) {
+            headerRow.insertBefore(header, actionsHeader);
+          }
+
+          rows.forEach((row) => {
+            const cell = row.querySelector(`td[data-column="${key}"]`);
+            const actionsCell = row.querySelector('td[data-column="actions"]');
+            if (cell && actionsCell) {
+              row.insertBefore(cell, actionsCell);
+            }
+          });
+        });
+      };
+
+      const applyState = () => {
+        reorderColumns();
+
+        const toggles = Array.from(document.querySelectorAll("[data-column-toggle]"));
+        toggles.forEach((toggle) => {
+          const key = toggle.dataset.columnToggle;
+          const defaultVisible = toggle.dataset.defaultVisible !== "false";
+          const visible = state.visible?.[key] ?? defaultVisible;
+          toggle.checked = visible;
+          applyColumnVisibility(key, visible);
+        });
+
+        autoFitColumnWidths();
+      };
+
+      settingsButton.addEventListener("click", () => {
+        const isHidden = settingsPanel.classList.toggle("hidden");
+        settingsButton.setAttribute("aria-expanded", String(!isHidden));
+      });
+
+      document.querySelectorAll("[data-column-toggle]").forEach((toggle) => {
+        toggle.addEventListener("change", () => {
+          const key = toggle.dataset.columnToggle;
+          state.visible = state.visible || {};
+          state.visible[key] = toggle.checked;
+          applyColumnVisibility(key, toggle.checked);
+          saveState();
+          autoFitColumnWidths();
+        });
+      });
+
+      let draggedKey = null;
+
+      const moveDraggedItem = (clientX, clientY, draggedItem) => {
+        const target = document.elementFromPoint(clientX, clientY)?.closest("[data-column-setting-item]");
+        if (!target || !draggedItem || target === draggedItem || !settingsList.contains(target)) {
+          return;
+        }
+        const targetRect = target.getBoundingClientRect();
+        const insertAfter = clientY > targetRect.top + targetRect.height / 2;
+        settingsList.insertBefore(draggedItem, insertAfter ? target.nextSibling : target);
+      };
+
+      const saveColumnOrder = () => {
+        state.order = Array.from(settingsList.querySelectorAll("[data-column-setting-item]"))
+          .map((item) => item.dataset.columnSettingItem);
+        saveState();
+        applyState();
+      };
+
+      settingsList.addEventListener("dragstart", (event) => {
+        const item = event.target.closest("[data-column-setting-item]");
+        if (!item) {
+          return;
+        }
+        draggedKey = item.dataset.columnSettingItem;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", draggedKey);
+        item.classList.add("opacity-50");
+      });
+
+      settingsList.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        const draggedItem = draggedKey ? document.querySelector(`[data-column-setting-item="${draggedKey}"]`) : null;
+        moveDraggedItem(event.clientX, event.clientY, draggedItem);
+      });
+
+      settingsList.addEventListener("dragend", () => {
+        document.querySelectorAll("[data-column-setting-item]").forEach((item) => {
+          item.classList.remove("opacity-50");
+        });
+        draggedKey = null;
+        saveColumnOrder();
+      });
+
+      document.querySelectorAll("[data-column-drag-handle]").forEach((handle) => {
+        handle.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          const item = handle.closest("[data-column-setting-item]");
+          if (!item) {
+            return;
+          }
+
+          item.classList.add("opacity-50");
+
+          const onMove = (moveEvent) => {
+            moveDraggedItem(moveEvent.clientX, moveEvent.clientY, item);
+          };
+
+          const onUp = () => {
+            item.classList.remove("opacity-50");
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+            saveColumnOrder();
+          };
+
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+      });
+
+      resizers.forEach((handle) => {
+        handle.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          const key = handle.dataset.resizeColumn;
+          const column = document.querySelector(`col[data-column="${key}"]`);
+          const header = document.querySelector(`th[data-column="${key}"]`);
+          const startX = event.clientX;
+          const startWidth = column?.getBoundingClientRect().width || header?.getBoundingClientRect().width || 120;
+
+          const onMove = (moveEvent) => {
+            const nextWidth = Math.max(80, Math.round(startWidth + moveEvent.clientX - startX));
+            applyColumnWidth(key, nextWidth);
+            table.style.width = `${Math.max(table.parentElement?.clientWidth || 0, table.getBoundingClientRect().width)}px`;
+          };
+
+          const onUp = () => {
+            const width = header?.getBoundingClientRect().width;
+            if (width) {
+              state.widths = state.widths || {};
+              state.widths[key] = Math.round(width);
+              saveState();
+            }
+            document.removeEventListener("mousemove", onMove);
+            document.removeEventListener("mouseup", onUp);
+          };
+
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+        });
+      });
+
+      resetButton?.addEventListener("click", () => {
+        localStorage.removeItem(storageKey);
+        state = {};
+        table.style.width = "";
+        document.querySelectorAll("col[data-column]").forEach((column) => {
+          column.style.width = "";
+          column.style.minWidth = "";
+        });
+        document.querySelectorAll("th[data-column], td[data-column]").forEach((cell) => {
+          cell.style.width = "";
+          cell.style.minWidth = "";
+        });
+        applyState();
+      });
+
+      window.addEventListener("resize", () => {
+        autoFitColumnWidths();
+      });
+
+      applyState();
+    })();
+  </script>
 {% endblock %}

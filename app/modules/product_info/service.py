@@ -9,6 +9,10 @@ from app.core.db import get_engine
 from app.shared.audit import build_change_set, record_operation_log
 
 
+class DuplicateProductError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class ProductFilters:
     q: str | None = None
@@ -20,18 +24,29 @@ class ProductFilters:
     page_size: int = 50
 
 
-LIST_COLUMNS = """
-    id,
-    asin,
-    msku,
-    store_site,
-    product_name,
-    sku,
-    brand,
-    listing,
-    sales_status,
-    updated_at
-"""
+PRODUCT_LIST_COLUMNS = (
+    {"key": "id", "label": "ID", "default_visible": False},
+    {"key": "msku", "label": "MSKU", "default_visible": True},
+    {"key": "asin", "label": "ASIN", "default_visible": True},
+    {"key": "store_site", "label": "店铺站点", "default_visible": True},
+    {"key": "parent_asin", "label": "父 ASIN", "default_visible": False},
+    {"key": "product_name", "label": "产品名称", "default_visible": True},
+    {"key": "sku", "label": "SKU", "default_visible": True},
+    {"key": "brand", "label": "品牌", "default_visible": True},
+    {"key": "fnsku", "label": "FNSKU", "default_visible": False},
+    {"key": "sales_status", "label": "销售状态", "default_visible": True},
+    {"key": "storage_type", "label": "仓储类型", "default_visible": False},
+    {"key": "category_level_1", "label": "一级品类", "default_visible": False},
+    {"key": "category_a", "label": "品类 A", "default_visible": False},
+    {"key": "category_b", "label": "品类 B", "default_visible": False},
+    {"key": "listing", "label": "Listing", "default_visible": True},
+    {"key": "label_name", "label": "标签名", "default_visible": False},
+    {"key": "msku_shipping_remark", "label": "MSKU 发货备注", "default_visible": False},
+    {"key": "transfer_remark", "label": "借调备注", "default_visible": False},
+    {"key": "msku_lock_status", "label": "锁仓 MSKU", "default_visible": False},
+    {"key": "created_at", "label": "创建时间", "default_visible": False},
+    {"key": "updated_at", "label": "更新时间", "default_visible": True},
+)
 
 EXPORT_COLUMNS = (
     ("msku", "MSKU"),
@@ -44,6 +59,9 @@ EXPORT_COLUMNS = (
     ("sales_status", "销售状态"),
     ("updated_at", "更新时间"),
 )
+
+LIST_COLUMNS = ",\n    ".join(column["key"] for column in PRODUCT_LIST_COLUMNS)
+EXPORT_SELECT_COLUMNS = ",\n    ".join(field for field, _ in EXPORT_COLUMNS)
 
 EDITABLE_FIELDS = (
     "product_name",
@@ -137,7 +155,7 @@ def list_products_for_export(filters: ProductFilters) -> list[dict[str, object]]
     where_sql, params = _build_where(filters)
     export_sql = text(
         f"""
-        SELECT {LIST_COLUMNS}
+        SELECT {EXPORT_SELECT_COLUMNS}
         FROM amazon_product_info
         {where_sql}
         ORDER BY updated_at DESC, id DESC
@@ -292,6 +310,14 @@ def create_product(
         return None
 
     allowed_payload = {key: value for key, value in payload.items() if key in CREATE_FIELDS}
+    duplicate_sql = text(
+        """
+        SELECT id
+        FROM amazon_product_info
+        WHERE store_site = :store_site AND msku = :msku
+        LIMIT 1
+        """
+    )
     insert_sql = text(
         f"""
         INSERT INTO amazon_product_info (
@@ -304,6 +330,13 @@ def create_product(
     )
 
     with engine.begin() as conn:
+        duplicate = conn.execute(
+            duplicate_sql,
+            {"store_site": store_site, "msku": msku},
+        ).first()
+        if duplicate:
+            raise DuplicateProductError
+
         result = conn.execute(insert_sql, allowed_payload)
         product_id = result.lastrowid
         change_data = {

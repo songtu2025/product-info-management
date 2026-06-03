@@ -1,9 +1,10 @@
 import json
 
+import pytest
 from sqlalchemy import create_engine, text
 
 from app.modules.product_info import service
-from app.modules.product_info.service import create_product, update_product
+from app.modules.product_info.service import DuplicateProductError, create_product, update_product
 from app.shared.audit import build_change_set
 
 
@@ -171,3 +172,63 @@ def test_create_product_inserts_row_and_writes_operation_log(monkeypatch):
         "asin": {"old": None, "new": "B012345678"},
         "product_name": {"old": None, "new": "New Product"},
     }
+
+
+def test_create_product_rejects_duplicate_store_site_msku_without_log(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    msku TEXT NOT NULL,
+                    store_site TEXT NOT NULL,
+                    product_name TEXT,
+                    UNIQUE (store_site, msku)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_operation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    changed_by TEXT NOT NULL,
+                    change_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (store_site, msku, product_name)
+                VALUES ('SAYOLA:US', 'MSKU-001', 'Old Product')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    with pytest.raises(DuplicateProductError):
+        create_product(
+            {
+                "store_site": "SAYOLA:US",
+                "msku": "MSKU-001",
+                "product_name": "New Product",
+            },
+            changed_by="admin",
+        )
+
+    with engine.connect() as conn:
+        product_count = conn.execute(text("SELECT COUNT(*) FROM amazon_product_info")).scalar_one()
+        log_count = conn.execute(text("SELECT COUNT(*) FROM amazon_operation_log")).scalar_one()
+
+    assert product_count == 1
+    assert log_count == 0

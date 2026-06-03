@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+
+{% macro value(text) -%}
+  {{ text if text not in [None, ""] else "-" }}
+{%- endmacro %}
+
+{% block content %}
+  <div class="mb-4">
+    <h2 class="text-xl font-semibold text-slate-950">数据质量</h2>
+    <p class="mt-1 text-sm text-slate-500">
+      共 {{ report.total }} 条产品。当前只做只读检查，不修改任何数据。
+    </p>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+    {% for issue in report.issues %}
+      <section class="content-panel px-4 py-4">
+        <div class="text-sm font-medium text-slate-500">{{ issue.label }}</div>
+        <div class="mt-2 text-2xl font-semibold text-slate-950">{{ issue.count }}</div>
+      </section>
+    {% endfor %}
+  </div>
+
+  <div class="mt-4 space-y-4">
+    {% for issue in report.issues %}
+      <section class="content-panel">
+        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+          <h3 class="text-base font-semibold text-slate-950">{{ issue.label }}</h3>
+          <span class="text-sm text-slate-500">共 {{ issue.count }} 条，显示前 20 条</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-left text-xs font-semibold text-slate-500">
+              <tr>
+                <th class="table-head">MSKU</th>
+                <th class="table-head">店铺站点</th>
+                <th class="table-head">产品名称</th>
+                <th class="table-head">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white text-slate-700">
+              {% for row in issue.rows %}
+                <tr>
+                  <td class="table-cell font-medium text-blue-800">{{ value(row.msku) }}</td>
+                  <td class="table-cell">{{ value(row.store_site) }}</td>
+                  <td class="table-cell max-w-md truncate" title="{{ row.product_name or '' }}">{{ value(row.product_name) }}</td>
+                  <td class="table-cell">
+                    <a class="text-sm font-semibold text-blue-800 hover:underline" href="/products/{{ row.id }}">查看详情</a>
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td class="px-4 py-6 text-center text-slate-500" colspan="4">暂无问题产品</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+{% endblock %}

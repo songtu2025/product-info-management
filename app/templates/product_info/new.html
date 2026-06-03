@@ -25,7 +25,13 @@
     <div class="grid gap-4 p-4 lg:grid-cols-3">
       <label class="field">
         <span class="field-label">店铺站点 *</span>
-        <input class="field-input" name="store_site" value="{{ value(row, 'store_site') }}" required>
+        <select class="field-input" name="store_site" required>
+          <option value="">请选择店铺站点</option>
+          {% for site in store_sites %}
+            {% set site_value = site.store_site %}
+            <option value="{{ site_value }}" {% if row.get('store_site') == site_value %}selected{% endif %}>{{ site_value }}</option>
+          {% endfor %}
+        </select>
       </label>
       <label class="field">
         <span class="field-label">MSKU *</span>

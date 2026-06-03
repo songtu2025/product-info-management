@@ -306,14 +306,19 @@ def test_product_import_preview_renders_result(monkeypatch):
 
 
 def test_product_import_commit_route_renders_result(monkeypatch):
+    captured = {}
     monkeypatch.setattr("app.modules.product_import.routes.load_import_upload", lambda token: b"xlsx")
-    monkeypatch.setattr(
-        "app.modules.product_import.routes.commit_product_import",
-        lambda content: {"success": True, "updated_count": 2, "skipped_count": 1, "message": "写入完成"},
-    )
+
+    def fake_commit_product_import(content, changed_by="system"):
+        captured["content"] = content
+        captured["changed_by"] = changed_by
+        return {"success": True, "updated_count": 2, "skipped_count": 1, "message": "写入完成"}
+
+    monkeypatch.setattr("app.modules.product_import.routes.commit_product_import", fake_commit_product_import)
 
     response = client.post("/products/import/commit", data={"import_token": "token-1"})
 
     assert response.status_code == 200
     assert "写入完成" in response.text
     assert "更新 2 行" in response.text
+    assert captured == {"content": b"xlsx", "changed_by": "test-admin"}
