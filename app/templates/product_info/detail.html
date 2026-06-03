@@ -9,108 +9,154 @@
   {% set store = detail.store_site %}
   {% set owner = detail.owner %}
 
-  <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-    <div>
-      <a class="text-sm font-medium text-blue-800 hover:underline" href="/">返回产品列表</a>
-      <h2 class="mt-2 text-xl font-semibold text-slate-950">{{ value(product.msku) }}</h2>
-      <p class="mt-1 text-sm text-slate-500">{{ value(product.product_name) }}</p>
-    </div>
-    <div class="flex items-center gap-2">
-      <a class="btn-secondary inline-flex items-center justify-center" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ product.id }}">查看操作日志</a>
+  <section class="content-panel detail-hero mb-4">
+    <div class="detail-hero-grid">
+      <div>
+        <a class="detail-back-link" href="/">返回产品列表</a>
+        <h2 class="detail-title">{{ value(product.msku) }}</h2>
+        <p class="detail-subtitle">{{ value(product.product_name) }}</p>
+        <div class="detail-chip-row mt-3">
+          <span class="detail-chip">店铺站点 <strong>{{ value(product.store_site) }}</strong></span>
+          <span class="detail-chip">Listing <strong>{{ value(product.listing) }}</strong></span>
+          {% if product.sales_status %}
+            <span class="status-badge">{{ product.sales_status }}</span>
+          {% endif %}
+          {% if product.msku_lock_status %}
+            <span class="status-badge status-badge-muted">锁仓 {{ product.msku_lock_status }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="detail-actions">
+        <a class="btn-secondary" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ product.id }}">查看操作日志</a>
       {% if request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
-        <a class="btn-primary inline-flex items-center justify-center" href="/products/{{ product.id }}/edit">编辑</a>
+          <a class="btn-primary" href="/products/{{ product.id }}/edit">编辑产品</a>
       {% endif %}
+      </div>
     </div>
-  </div>
+  </section>
 
   <div class="grid gap-4 xl:grid-cols-3">
     <div class="space-y-4 xl:col-span-2">
       <section class="content-panel">
-        <div class="border-b border-slate-200 px-4 py-4">
-          <h3 class="text-base font-semibold text-slate-950">关键定位字段</h3>
+        <div class="detail-panel-heading">
+          <h3 class="detail-panel-title">关键定位字段</h3>
+          <p class="detail-panel-subtitle">用于唯一定位产品和关联配置。</p>
         </div>
         <dl class="detail-grid p-4">
-          <div><dt>店铺站点</dt><dd>{{ value(product.store_site) }}</dd></div>
-          <div><dt>MSKU</dt><dd>{{ value(product.msku) }}</dd></div>
-          <div><dt>Listing</dt><dd>{{ value(product.listing) }}</dd></div>
+          <div class="detail-field"><dt>店铺站点</dt><dd>{{ value(product.store_site) }}</dd></div>
+          <div class="detail-field"><dt>MSKU</dt><dd><span class="code-pill">{{ value(product.msku) }}</span></dd></div>
+          <div class="detail-field"><dt>Listing</dt><dd>{{ value(product.listing) }}</dd></div>
         </dl>
       </section>
 
       <section class="content-panel">
-        <div class="border-b border-slate-200 px-4 py-4">
-          <h3 class="text-base font-semibold text-slate-950">基础信息</h3>
+        <div class="detail-panel-heading">
+          <h3 class="detail-panel-title">基础信息</h3>
+          <p class="detail-panel-subtitle">Amazon 标识、SKU 和品牌信息。</p>
         </div>
         <dl class="detail-grid p-4">
-          <div><dt>ASIN</dt><dd class="mono">{{ value(product.asin) }}</dd></div>
-          <div><dt>父 ASIN</dt><dd class="mono">{{ value(product.parent_asin) }}</dd></div>
-          <div><dt>FNSKU</dt><dd class="mono">{{ value(product.fnsku) }}</dd></div>
-          <div><dt>SKU</dt><dd class="mono">{{ value(product.sku) }}</dd></div>
-          <div><dt>产品名称</dt><dd>{{ value(product.product_name) }}</dd></div>
-          <div><dt>品牌</dt><dd>{{ value(product.brand) }}</dd></div>
+          <div class="detail-field"><dt>ASIN</dt><dd><span class="code-pill">{{ value(product.asin) }}</span></dd></div>
+          <div class="detail-field"><dt>父 ASIN</dt><dd><span class="code-pill">{{ value(product.parent_asin) }}</span></dd></div>
+          <div class="detail-field"><dt>FNSKU</dt><dd><span class="code-pill">{{ value(product.fnsku) }}</span></dd></div>
+          <div class="detail-field"><dt>SKU</dt><dd><span class="code-pill">{{ value(product.sku) }}</span></dd></div>
+          <div class="detail-field"><dt>产品名称</dt><dd>{{ value(product.product_name) }}</dd></div>
+          <div class="detail-field"><dt>品牌</dt><dd>{{ value(product.brand) }}</dd></div>
         </dl>
       </section>
 
       <section class="content-panel">
-        <div class="border-b border-slate-200 px-4 py-4">
-          <h3 class="text-base font-semibold text-slate-950">运营维护</h3>
+        <div class="detail-panel-heading">
+          <h3 class="detail-panel-title">运营维护</h3>
+          <p class="detail-panel-subtitle">运营状态、分类和系统更新时间。</p>
         </div>
         <dl class="detail-grid p-4">
-          <div><dt>销售状态</dt><dd>{{ value(product.sales_status) }}</dd></div>
-          <div><dt>仓储类型</dt><dd>{{ value(product.storage_type) }}</dd></div>
-          <div><dt>一级品类</dt><dd>{{ value(product.category_level_1) }}</dd></div>
-          <div><dt>品类 A</dt><dd>{{ value(product.category_a) }}</dd></div>
-          <div><dt>品类 B</dt><dd>{{ value(product.category_b) }}</dd></div>
-          <div><dt>锁仓 MSKU</dt><dd>{{ value(product.msku_lock_status) }}</dd></div>
-          <div><dt>创建时间</dt><dd>{{ value(product.created_at) }}</dd></div>
-          <div><dt>更新时间</dt><dd>{{ value(product.updated_at) }}</dd></div>
+          <div class="detail-field">
+            <dt>销售状态</dt>
+            <dd>{% if product.sales_status %}<span class="status-badge">{{ product.sales_status }}</span>{% else %}-{% endif %}</dd>
+          </div>
+          <div class="detail-field"><dt>仓储类型</dt><dd>{{ value(product.storage_type) }}</dd></div>
+          <div class="detail-field"><dt>一级品类</dt><dd>{{ value(product.category_level_1) }}</dd></div>
+          <div class="detail-field"><dt>品类 A</dt><dd>{{ value(product.category_a) }}</dd></div>
+          <div class="detail-field"><dt>品类 B</dt><dd>{{ value(product.category_b) }}</dd></div>
+          <div class="detail-field">
+            <dt>锁仓 MSKU</dt>
+            <dd>{% if product.msku_lock_status %}<span class="status-badge status-badge-muted">{{ product.msku_lock_status }}</span>{% else %}-{% endif %}</dd>
+          </div>
+          <div class="detail-field"><dt>创建时间</dt><dd>{{ value(product.created_at) }}</dd></div>
+          <div class="detail-field"><dt>更新时间</dt><dd>{{ value(product.updated_at) }}</dd></div>
         </dl>
       </section>
     </div>
 
     <aside class="space-y-4">
-      <section class="content-panel">
-        <div class="border-b border-slate-200 px-4 py-4">
-          <h3 class="text-base font-semibold text-slate-950">店铺站点</h3>
+      <section class="content-panel relation-panel">
+        <div class="detail-panel-heading">
+          <h3 class="detail-panel-title">店铺站点</h3>
+          <p class="detail-panel-subtitle">当前产品关联的店铺配置。</p>
         </div>
         <dl class="detail-list p-4">
-          <div><dt>店铺/站点</dt><dd>{{ value(store.store_site if store else None) }}</dd></div>
-          <div><dt>店铺</dt><dd>{{ value(store.store if store else None) }}</dd></div>
-          <div><dt>国家</dt><dd>{{ value(store.country if store else None) }}</dd></div>
-          <div><dt>域名</dt><dd>{{ value(store.domain if store else None) }}</dd></div>
+          <div class="detail-field"><dt>店铺/站点</dt><dd>{{ value(store.store_site if store else None) }}</dd></div>
+          <div class="detail-field"><dt>店铺</dt><dd>{{ value(store.store if store else None) }}</dd></div>
+          <div class="detail-field"><dt>国家</dt><dd>{{ value(store.country if store else None) }}</dd></div>
+          <div class="detail-field"><dt>域名</dt><dd>{{ value(store.domain if store else None) }}</dd></div>
         </dl>
+        <div class="relation-actions">
+          {% if product.store_site %}
+            <a class="relation-link" href="/store-sites?q={{ product.store_site|urlencode }}">查看店铺配置 <span>进入</span></a>
+          {% endif %}
+        </div>
       </section>
 
-      <section class="content-panel">
-        <div class="border-b border-slate-200 px-4 py-4">
-          <h3 class="text-base font-semibold text-slate-950">Listing 负责人</h3>
+      <section class="content-panel relation-panel">
+        <div class="detail-panel-heading">
+          <h3 class="detail-panel-title">Listing 负责人</h3>
+          <p class="detail-panel-subtitle">当前 Listing 的维护归属。</p>
         </div>
         <dl class="detail-list p-4">
-          <div><dt>负责人</dt><dd>{{ value(owner.owner if owner else None) }}</dd></div>
-          <div><dt>Listing 状态</dt><dd>{{ value(owner.listing_status if owner else None) }}</dd></div>
-          <div><dt>维护人</dt><dd>{{ value(owner.listing_maintainer if owner else None) }}</dd></div>
-          <div><dt>纳入库龄考核</dt><dd>{{ value(owner.include_inventory_age_assessment if owner else None) }}</dd></div>
-          <div><dt>项目组</dt><dd>{{ value(owner.project_group if owner else None) }}</dd></div>
+          <div class="detail-field"><dt>负责人</dt><dd>{{ value(owner.owner if owner else None) }}</dd></div>
+          <div class="detail-field">
+            <dt>Listing 状态</dt>
+            <dd>
+              {% if owner and owner.listing_status %}
+                <span class="status-badge">{{ owner.listing_status }}</span>
+              {% else %}
+                -
+              {% endif %}
+            </dd>
+          </div>
+          <div class="detail-field"><dt>维护人</dt><dd>{{ value(owner.listing_maintainer if owner else None) }}</dd></div>
+          <div class="detail-field"><dt>纳入库龄考核</dt><dd>{{ value(owner.include_inventory_age_assessment if owner else None) }}</dd></div>
+          <div class="detail-field"><dt>项目组</dt><dd>{{ value(owner.project_group if owner else None) }}</dd></div>
         </dl>
+        <div class="relation-actions">
+          {% if product.store_site %}
+            <a class="relation-link" href="/listing-owners?q={{ product.store_site|urlencode }}">按店铺查看负责人 <span>进入</span></a>
+          {% endif %}
+          {% if product.listing %}
+            <a class="relation-link" href="/listing-owners?q={{ product.listing|urlencode }}">按 Listing 查看负责人 <span>进入</span></a>
+          {% endif %}
+        </div>
       </section>
     </aside>
   </div>
 
   <section class="content-panel mt-4">
-    <div class="border-b border-slate-200 px-4 py-4">
-      <h3 class="text-base font-semibold text-slate-950">备注信息</h3>
+    <div class="detail-panel-heading">
+      <h3 class="detail-panel-title">备注信息</h3>
+      <p class="detail-panel-subtitle">运营协作中需要保留的补充说明。</p>
     </div>
-    <div class="grid gap-4 p-4 lg:grid-cols-3">
-      <div>
-        <div class="text-sm font-semibold text-slate-600">标签名</div>
-        <p class="mt-2 whitespace-pre-wrap text-sm text-slate-800">{{ value(product.label_name) }}</p>
+    <div class="note-grid p-4">
+      <div class="note-block">
+        <div class="note-label">标签名</div>
+        <p class="note-text">{{ value(product.label_name) }}</p>
       </div>
-      <div>
-        <div class="text-sm font-semibold text-slate-600">MSKU 发货备注</div>
-        <p class="mt-2 whitespace-pre-wrap text-sm text-slate-800">{{ value(product.msku_shipping_remark) }}</p>
+      <div class="note-block">
+        <div class="note-label">MSKU 发货备注</div>
+        <p class="note-text">{{ value(product.msku_shipping_remark) }}</p>
       </div>
-      <div>
-        <div class="text-sm font-semibold text-slate-600">借调备注</div>
-        <p class="mt-2 whitespace-pre-wrap text-sm text-slate-800">{{ value(product.transfer_remark) }}</p>
+      <div class="note-block">
+        <div class="note-label">借调备注</div>
+        <p class="note-text">{{ value(product.transfer_remark) }}</p>
       </div>
     </div>
   </section>
