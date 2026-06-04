@@ -1,13 +1,16 @@
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
-from app.core.security import require_admin
+from app.core.security import current_user, require_admin
 from app.core.templates import templates
 from app.modules.product_info.service import (
     DuplicateProductError,
     ProductFilters,
     PRODUCT_LIST_COLUMNS,
+    PRODUCT_PAGE_SIZES,
     build_create_payload,
     build_update_payload,
     create_product,
@@ -18,9 +21,11 @@ from app.modules.product_info.service import (
     update_product,
 )
 from app.modules.store_site.service import list_store_sites
+from app.shared.user_preference import get_user_preference, save_user_preference
 
 
 router = APIRouter()
+COLUMN_PREFERENCE_KEY = "product_info.list.columns"
 
 
 def build_product_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
@@ -42,6 +47,7 @@ def product_list(
     sales_status: str | None = None,
     listing: str | None = None,
     page: int = 1,
+    page_size: int = 50,
 ):
     filters = ProductFilters(
         q=q,
@@ -50,9 +56,20 @@ def product_list(
         sales_status=sales_status,
         listing=listing,
         page=page,
+        page_size=page_size,
     )
     products = list_products(filters)
     options = get_filter_options()
+    normalized_filters = ProductFilters(
+        q=filters.q,
+        store_site=filters.store_site,
+        brand=filters.brand,
+        sales_status=filters.sales_status,
+        listing=filters.listing,
+        page=int(products["page"]),
+        page_size=int(products["page_size"]),
+    )
+    username = _preference_username(request)
 
     return templates.TemplateResponse(
         request,
@@ -63,12 +80,29 @@ def product_list(
             "filters": filters,
             "products": products,
             "product_list_columns": PRODUCT_LIST_COLUMNS,
+            "product_page_sizes": PRODUCT_PAGE_SIZES,
+            "column_state": get_user_preference(username, COLUMN_PREFERENCE_KEY) if username else {},
+            "pagination": _build_pagination(normalized_filters, int(products["pages"])),
             "options": options,
             "export_url": "/products/export"
             + (f"?{request.url.query}" if request.url.query else ""),
             "create_url": "/products/new",
         },
     )
+
+
+@router.post("/products/preferences/columns")
+async def product_column_preference_save(request: Request):
+    username = _preference_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    state = await request.json()
+    if not isinstance(state, dict):
+        raise HTTPException(status_code=400, detail="Invalid preference")
+    if not save_user_preference(username, COLUMN_PREFERENCE_KEY, state):
+        raise HTTPException(status_code=500, detail="Save failed")
+    return {"ok": True}
 
 
 @router.get("/products/export")
@@ -93,6 +127,42 @@ def product_export(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="products_export.xlsx"'},
     )
+
+
+def _preference_username(request: Request) -> str | None:
+    if getattr(request.app.state, "disable_auth", False):
+        return "test-admin"
+    user = current_user(request)
+    return user.username if user else None
+
+
+def _build_pagination(filters: ProductFilters, pages: int) -> dict[str, object]:
+    current_page = max(filters.page, 1)
+    last_page = max(pages, 1)
+    start_page = max(1, current_page - 2)
+    end_page = min(last_page, current_page + 2)
+    page_numbers = list(range(start_page, end_page + 1))
+    return {
+        "first_url": _build_list_url(filters, 1),
+        "prev_url": _build_list_url(filters, max(1, current_page - 1)),
+        "next_url": _build_list_url(filters, min(last_page, current_page + 1)),
+        "last_url": _build_list_url(filters, last_page),
+        "page_numbers": [{"page": page, "url": _build_list_url(filters, page)} for page in page_numbers],
+    }
+
+
+def _build_list_url(filters: ProductFilters, page: int) -> str:
+    params = {
+        "q": filters.q,
+        "store_site": filters.store_site,
+        "brand": filters.brand,
+        "sales_status": filters.sales_status,
+        "listing": filters.listing,
+        "page_size": filters.page_size,
+        "page": page,
+    }
+    query = urlencode({key: value for key, value in params.items() if value not in (None, "")})
+    return f"?{query}" if query else "?"
 
 
 @router.get("/products/new", response_class=HTMLResponse)

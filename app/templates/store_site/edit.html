@@ -5,35 +5,59 @@
 {%- endmacro %}
 
 {% block content %}
-  <div class="mb-4">
-    <a class="text-sm font-medium text-blue-800 hover:underline" href="/store-sites">返回店铺站点</a>
-    <h2 class="mt-2 text-xl font-semibold text-slate-950">编辑店铺站点</h2>
-    <p class="mt-1 text-sm text-slate-500">{{ row.store_site }}。该关联键暂不允许编辑。</p>
+  <div class="form-page-header">
+    <div>
+      <a class="detail-back-link" href="/store-sites">返回店铺站点</a>
+      <h2 class="form-title">编辑店铺站点</h2>
+      <p class="form-subtitle">只维护店铺、国家和域名，店铺站点关联键保持只读。</p>
+    </div>
   </div>
 
   {% if error %}
-    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {{ error }}
-    </div>
+    <div class="form-alert">{{ error }}</div>
   {% endif %}
 
   <form class="content-panel" method="post">
-    <div class="grid gap-4 p-4 md:grid-cols-3">
-      <label class="field">
-        <span class="field-label">店铺</span>
-        <input class="field-input" name="store" value="{{ value(row.store) }}">
-      </label>
-      <label class="field">
-        <span class="field-label">国家</span>
-        <input class="field-input" name="country" value="{{ value(row.country) }}">
-      </label>
-      <label class="field">
-        <span class="field-label">域名</span>
-        <input class="field-input" name="domain" value="{{ value(row.domain) }}">
-      </label>
-    </div>
-    <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-4">
-      <a class="btn-secondary inline-flex items-center" href="/store-sites">取消</a>
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">只读关联键</h3>
+        <p class="form-section-subtitle">该值用于关联产品信息和负责人配置，不在编辑页修改。</p>
+      </div>
+
+      <div class="p-4">
+        <div class="read-only-strip">
+          <div class="read-only-item">
+            <div class="read-only-label">店铺站点</div>
+            <div class="read-only-value mono">{{ row.store_site or "-" }}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">站点信息</h3>
+        <p class="form-section-subtitle">维护店铺名称、国家和域名。</p>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">店铺</span>
+          <input class="field-input" name="store" value="{{ value(row.store) }}">
+        </label>
+        <label class="field">
+          <span class="field-label">国家</span>
+          <input class="field-input" name="country" value="{{ value(row.country) }}">
+        </label>
+        <label class="field">
+          <span class="field-label">域名</span>
+          <input class="field-input" name="domain" value="{{ value(row.domain) }}">
+        </label>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <a class="btn-secondary" href="/store-sites">取消</a>
       <button class="btn-primary" type="submit">保存</button>
     </div>
   </form>

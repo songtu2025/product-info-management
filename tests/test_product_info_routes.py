@@ -160,6 +160,100 @@ def test_product_list_passes_search_and_filter_params(monkeypatch):
     assert captured["filters"].page_size == 50
 
 
+def test_product_list_passes_page_size_and_keeps_it_in_pagination(monkeypatch):
+    captured = {}
+
+    def fake_list_products(filters):
+        captured["filters"] = filters
+        return {
+            "rows": [],
+            "total": 250,
+            "page": filters.page,
+            "page_size": filters.page_size,
+            "pages": 3,
+        }
+
+    monkeypatch.setattr("app.modules.product_info.routes.list_products", fake_list_products)
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {"store_sites": [], "brands": [], "sales_statuses": [], "listings": []},
+    )
+
+    response = client.get(
+        "/",
+        params={
+            "q": "abc",
+            "brand": "BrandA",
+            "page": "2",
+            "page_size": "100",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["filters"].page == 2
+    assert captured["filters"].page_size == 100
+    assert 'name="page_size"' in response.text
+    assert 'value="100" selected' in response.text
+    assert "q=abc&amp;brand=BrandA&amp;page_size=100&amp;page=1" in response.text
+    assert "q=abc&amp;brand=BrandA&amp;page_size=100&amp;page=3" in response.text
+
+
+def test_product_list_loads_saved_column_state(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_products",
+        lambda filters: {"rows": [], "total": 0, "page": 1, "page_size": 50, "pages": 0},
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {"store_sites": [], "brands": [], "sales_statuses": [], "listings": []},
+    )
+
+    def fake_get_preference(username, key):
+        captured["username"] = username
+        captured["key"] = key
+        return {"visible": {"id": True}, "order": ["id", "msku"], "widths": {"id": 88}}
+
+    monkeypatch.setattr("app.modules.product_info.routes.get_user_preference", fake_get_preference)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert captured == {
+        "username": "test-admin",
+        "key": "product_info.list.columns",
+    }
+    assert "serverColumnState" in response.text
+    assert '"visible": {"id": true}' in response.text
+    assert '"order": ["id", "msku"]' in response.text
+
+
+def test_product_column_preference_save_persists_for_current_user(monkeypatch):
+    captured = {}
+
+    def fake_save_preference(username, key, value):
+        captured["username"] = username
+        captured["key"] = key
+        captured["value"] = value
+        return True
+
+    monkeypatch.setattr("app.modules.product_info.routes.save_user_preference", fake_save_preference)
+
+    response = client.post(
+        "/products/preferences/columns",
+        json={"visible": {"id": True}, "order": ["id", "msku"], "widths": {"id": 88}},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert captured == {
+        "username": "test-admin",
+        "key": "product_info.list.columns",
+        "value": {"visible": {"id": True}, "order": ["id", "msku"], "widths": {"id": 88}},
+    }
+
+
 def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
     captured = {}
 

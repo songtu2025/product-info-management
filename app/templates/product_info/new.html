@@ -5,115 +5,139 @@
 {%- endmacro %}
 
 {% block content %}
-  <div class="mb-4">
-    <a class="text-sm font-medium text-blue-800 hover:underline" href="/">返回产品列表</a>
-    <h2 class="mt-2 text-xl font-semibold text-slate-950">新增产品信息</h2>
-    <p class="mt-1 text-sm text-slate-500">店铺站点和 MSKU 必填，其余字段可后续维护。</p>
+  <div class="form-page-header">
+    <div>
+      <a class="detail-back-link" href="/">返回产品列表</a>
+      <h2 class="form-title">新增产品信息</h2>
+      <p class="form-subtitle">先建立产品主数据，后续再补充运营维护和备注字段。</p>
+    </div>
   </div>
 
   {% if error %}
-    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {{ error }}
-    </div>
+    <div class="form-alert">{{ error }}</div>
   {% endif %}
 
   <form class="content-panel" method="post">
-    <div class="border-b border-slate-200 px-4 py-4">
-      <h3 class="text-base font-semibold text-slate-950">关键定位字段</h3>
-    </div>
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">关键定位字段</h3>
+        <p class="form-section-subtitle">`store_site + msku` 用于唯一定位一条产品信息。</p>
+      </div>
 
-    <div class="grid gap-4 p-4 lg:grid-cols-3">
-      <label class="field">
-        <span class="field-label">店铺站点 *</span>
-        <select class="field-input" name="store_site" required>
-          <option value="">请选择店铺站点</option>
-          {% for site in store_sites %}
-            {% set site_value = site.store_site %}
-            <option value="{{ site_value }}" {% if row.get('store_site') == site_value %}selected{% endif %}>{{ site_value }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label class="field">
-        <span class="field-label">MSKU *</span>
-        <input class="field-input" name="msku" value="{{ value(row, 'msku') }}" required>
-      </label>
-      <label class="field">
-        <span class="field-label">Listing</span>
-        <input class="field-input" name="listing" value="{{ value(row, 'listing') }}">
-      </label>
-    </div>
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">店铺站点 <span class="required-mark">*</span></span>
+          <select class="field-input" name="store_site" required>
+            <option value="">请选择店铺站点</option>
+            {% for site in store_sites %}
+              {% set site_value = site.store_site %}
+              <option value="{{ site_value }}" {% if row.get('store_site') == site_value %}selected{% endif %}>{{ site_value }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">MSKU <span class="required-mark">*</span></span>
+          <input class="field-input mono" name="msku" value="{{ value(row, 'msku') }}" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Listing</span>
+          <input class="field-input" name="listing" value="{{ value(row, 'listing') }}">
+        </label>
+      </div>
+    </section>
 
-    <div class="grid gap-4 border-t border-slate-200 p-4 lg:grid-cols-3">
-      <label class="field">
-        <span class="field-label">ASIN</span>
-        <input class="field-input" name="asin" value="{{ value(row, 'asin') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">父 ASIN</span>
-        <input class="field-input" name="parent_asin" value="{{ value(row, 'parent_asin') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">FNSKU</span>
-        <input class="field-input" name="fnsku" value="{{ value(row, 'fnsku') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">SKU</span>
-        <input class="field-input" name="sku" value="{{ value(row, 'sku') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">产品名称</span>
-        <input class="field-input" name="product_name" value="{{ value(row, 'product_name') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">品牌</span>
-        <input class="field-input" name="brand" value="{{ value(row, 'brand') }}">
-      </label>
-    </div>
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">基础信息</h3>
+        <p class="form-section-subtitle">Amazon 标识、SKU、产品名称和品牌。</p>
+      </div>
 
-    <div class="grid gap-4 border-t border-slate-200 p-4 lg:grid-cols-3">
-      <label class="field">
-        <span class="field-label">销售状态</span>
-        <input class="field-input" name="sales_status" value="{{ value(row, 'sales_status') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">仓储类型</span>
-        <input class="field-input" name="storage_type" value="{{ value(row, 'storage_type') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">一级品类</span>
-        <input class="field-input" name="category_level_1" value="{{ value(row, 'category_level_1') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">品类 A</span>
-        <input class="field-input" name="category_a" value="{{ value(row, 'category_a') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">品类 B</span>
-        <input class="field-input" name="category_b" value="{{ value(row, 'category_b') }}">
-      </label>
-      <label class="field">
-        <span class="field-label">锁仓 MSKU</span>
-        <input class="field-input" name="msku_lock_status" value="{{ value(row, 'msku_lock_status') }}">
-      </label>
-    </div>
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">ASIN</span>
+          <input class="field-input mono" name="asin" value="{{ value(row, 'asin') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">父 ASIN</span>
+          <input class="field-input mono" name="parent_asin" value="{{ value(row, 'parent_asin') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">FNSKU</span>
+          <input class="field-input mono" name="fnsku" value="{{ value(row, 'fnsku') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">SKU</span>
+          <input class="field-input mono" name="sku" value="{{ value(row, 'sku') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">产品名称</span>
+          <input class="field-input" name="product_name" value="{{ value(row, 'product_name') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">品牌</span>
+          <input class="field-input" name="brand" value="{{ value(row, 'brand') }}">
+        </label>
+      </div>
+    </section>
 
-    <div class="grid gap-4 border-t border-slate-200 p-4 lg:grid-cols-3">
-      <label class="field">
-        <span class="field-label">标签名</span>
-        <textarea class="field-textarea" name="label_name">{{ value(row, 'label_name') }}</textarea>
-      </label>
-      <label class="field">
-        <span class="field-label">MSKU 发货备注</span>
-        <textarea class="field-textarea" name="msku_shipping_remark">{{ value(row, 'msku_shipping_remark') }}</textarea>
-      </label>
-      <label class="field">
-        <span class="field-label">借调备注</span>
-        <textarea class="field-textarea" name="transfer_remark">{{ value(row, 'transfer_remark') }}</textarea>
-      </label>
-    </div>
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">运营维护</h3>
+        <p class="form-section-subtitle">销售状态、仓储、分类和锁仓信息。</p>
+      </div>
 
-    <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-4">
-      <a class="btn-secondary inline-flex items-center" href="/">取消</a>
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">销售状态</span>
+          <input class="field-input" name="sales_status" value="{{ value(row, 'sales_status') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">仓储类型</span>
+          <input class="field-input" name="storage_type" value="{{ value(row, 'storage_type') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">一级品类</span>
+          <input class="field-input" name="category_level_1" value="{{ value(row, 'category_level_1') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">品类 A</span>
+          <input class="field-input" name="category_a" value="{{ value(row, 'category_a') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">品类 B</span>
+          <input class="field-input" name="category_b" value="{{ value(row, 'category_b') }}">
+        </label>
+        <label class="field">
+          <span class="field-label">锁仓 MSKU</span>
+          <input class="field-input" name="msku_lock_status" value="{{ value(row, 'msku_lock_status') }}">
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">备注信息</h3>
+        <p class="form-section-subtitle">用于运营协作的长文本说明。</p>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">标签名</span>
+          <textarea class="field-textarea" name="label_name">{{ value(row, 'label_name') }}</textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">MSKU 发货备注</span>
+          <textarea class="field-textarea" name="msku_shipping_remark">{{ value(row, 'msku_shipping_remark') }}</textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">借调备注</span>
+          <textarea class="field-textarea" name="transfer_remark">{{ value(row, 'transfer_remark') }}</textarea>
+        </label>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <a class="btn-secondary" href="/">取消</a>
       <button class="btn-primary" type="submit">保存</button>
     </div>
   </form>

@@ -14,7 +14,7 @@
       </div>
     </div>
 
-    <div class="grid gap-3 lg:grid-cols-6">
+    <div class="grid gap-3 lg:grid-cols-7">
       <label class="field lg:col-span-2">
         <span class="field-label">关键词</span>
         <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="MSKU / ASIN / SKU / Listing">
@@ -56,6 +56,15 @@
           <option value="">全部</option>
           {% for value in options.listings %}
             <option value="{{ value }}" {% if filters.listing == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">每页行数</span>
+        <select class="field-input" name="page_size">
+          {% for size in product_page_sizes %}
+            <option value="{{ size }}" {% if products.page_size == size %}selected{% endif %}>{{ size }}</option>
           {% endfor %}
         </select>
       </label>
@@ -182,24 +191,56 @@
       </table>
     </div>
 
-    <div class="flex items-center justify-between px-4 py-3 text-sm">
-      {% set prev_page = products.page - 1 %}
-      {% set next_page = products.page + 1 %}
-      <a
-        class="btn-secondary {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
-        href="?q={{ filters.q or '' }}&store_site={{ filters.store_site or '' }}&brand={{ filters.brand or '' }}&sales_status={{ filters.sales_status or '' }}&listing={{ filters.listing or '' }}&page={{ prev_page }}"
-      >上一页</a>
-      <span class="text-slate-500">第 {{ products.page }} / {{ products.pages if products.pages else 1 }} 页</span>
-      <a
-        class="btn-secondary {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
-        href="?q={{ filters.q or '' }}&store_site={{ filters.store_site or '' }}&brand={{ filters.brand or '' }}&sales_status={{ filters.sales_status or '' }}&listing={{ filters.listing or '' }}&page={{ next_page }}"
-      >下一页</a>
+    <div class="flex flex-col gap-3 px-4 py-3 text-sm lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex flex-wrap items-center gap-2">
+        <a
+          class="btn-secondary {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.first_url }}"
+        >首页</a>
+        <a
+          class="btn-secondary {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.prev_url }}"
+        >上一页</a>
+        {% for item in pagination.page_numbers %}
+          <a
+            class="btn-secondary {% if item.page == products.page %}bg-slate-900 text-white{% endif %}"
+            href="{{ item.url }}"
+          >{{ item.page }}</a>
+        {% endfor %}
+        <a
+          class="btn-secondary {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.next_url }}"
+        >下一页</a>
+        <a
+          class="btn-secondary {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.last_url }}"
+        >末页</a>
+      </div>
+      <form class="flex items-center gap-2" method="get">
+        <input name="q" type="hidden" value="{{ filters.q or '' }}">
+        <input name="store_site" type="hidden" value="{{ filters.store_site or '' }}">
+        <input name="brand" type="hidden" value="{{ filters.brand or '' }}">
+        <input name="sales_status" type="hidden" value="{{ filters.sales_status or '' }}">
+        <input name="listing" type="hidden" value="{{ filters.listing or '' }}">
+        <input name="page_size" type="hidden" value="{{ products.page_size }}">
+        <span class="text-slate-500">第 {{ products.page }} / {{ products.pages if products.pages else 1 }} 页</span>
+        <input
+          class="field-input h-9 w-20"
+          min="1"
+          max="{{ products.pages if products.pages else 1 }}"
+          name="page"
+          type="number"
+          value="{{ products.page }}"
+        >
+        <button class="btn-secondary" type="submit">跳转</button>
+      </form>
     </div>
   </div>
 
   <script>
     (() => {
       const storageKey = "productListColumnState";
+      const serverColumnState = {{ column_state|tojson }};
       const table = document.querySelector("table");
       const settingsButton = document.querySelector("[data-column-settings-button]");
       const settingsPanel = document.querySelector("[data-column-settings-panel]");
@@ -222,6 +263,9 @@
       }
 
       const readState = () => {
+        if (serverColumnState && Object.keys(serverColumnState).length) {
+          return serverColumnState;
+        }
         try {
           return JSON.parse(localStorage.getItem(storageKey)) || {};
         } catch (error) {
@@ -233,6 +277,11 @@
 
       const saveState = () => {
         localStorage.setItem(storageKey, JSON.stringify(state));
+        fetch("/products/preferences/columns", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(state),
+        }).catch(() => {});
       };
 
       const applyColumnVisibility = (key, visible) => {
@@ -494,6 +543,7 @@
           cell.style.minWidth = "";
         });
         applyState();
+        saveState();
       });
 
       window.addEventListener("resize", () => {

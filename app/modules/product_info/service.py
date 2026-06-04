@@ -48,6 +48,8 @@ PRODUCT_LIST_COLUMNS = (
     {"key": "updated_at", "label": "更新时间", "default_visible": True},
 )
 
+PRODUCT_PAGE_SIZES = (50, 100, 200)
+
 EXPORT_COLUMNS = (
     ("msku", "MSKU"),
     ("asin", "ASIN"),
@@ -100,6 +102,7 @@ CREATE_FIELDS = (
 
 
 def normalize_filters(filters: ProductFilters) -> ProductFilters:
+    page_size = filters.page_size if filters.page_size in PRODUCT_PAGE_SIZES else 50
     return ProductFilters(
         q=_clean(filters.q),
         store_site=_clean(filters.store_site),
@@ -107,7 +110,7 @@ def normalize_filters(filters: ProductFilters) -> ProductFilters:
         sales_status=_clean(filters.sales_status),
         listing=_clean(filters.listing),
         page=max(filters.page, 1),
-        page_size=50,
+        page_size=page_size,
     )
 
 

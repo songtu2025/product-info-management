@@ -5,43 +5,81 @@
 {%- endmacro %}
 
 {% block content %}
-  <div class="mb-4">
-    <a class="text-sm font-medium text-blue-800 hover:underline" href="/listing-owners">返回 Listing 负责人</a>
-    <h2 class="mt-2 text-xl font-semibold text-slate-950">编辑 Listing 负责人</h2>
-    <p class="mt-1 text-sm text-slate-500">{{ row.store_site }} · {{ row.listing }}。关联键暂不允许编辑。</p>
+  <div class="form-page-header">
+    <div>
+      <a class="detail-back-link" href="/listing-owners">返回 Listing 负责人</a>
+      <h2 class="form-title">编辑 Listing 负责人</h2>
+      <p class="form-subtitle">维护负责人、状态、考核和项目组，关联键保持只读。</p>
+    </div>
   </div>
 
   {% if error %}
-    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {{ error }}
-    </div>
+    <div class="form-alert">{{ error }}</div>
   {% endif %}
 
   <form class="content-panel" method="post">
-    <div class="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
-      <label class="field">
-        <span class="field-label">负责人</span>
-        <input class="field-input" name="owner" value="{{ value(row.owner) }}">
-      </label>
-      <label class="field">
-        <span class="field-label">Listing 状态</span>
-        <input class="field-input" name="listing_status" value="{{ value(row.listing_status) }}">
-      </label>
-      <label class="field">
-        <span class="field-label">Listing 维护人</span>
-        <input class="field-input" name="listing_maintainer" value="{{ value(row.listing_maintainer) }}">
-      </label>
-      <label class="field">
-        <span class="field-label">是否纳入库龄考核</span>
-        <input class="field-input" name="include_inventory_age_assessment" value="{{ value(row.include_inventory_age_assessment) }}">
-      </label>
-      <label class="field">
-        <span class="field-label">项目组</span>
-        <input class="field-input" name="project_group" value="{{ value(row.project_group) }}">
-      </label>
-    </div>
-    <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-4">
-      <a class="btn-secondary inline-flex items-center" href="/listing-owners">取消</a>
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">只读关联键</h3>
+        <p class="form-section-subtitle">`store_site + listing` 用于唯一定位负责人配置，不在编辑页修改。</p>
+      </div>
+
+      <div class="p-4">
+        <div class="read-only-strip">
+          <div class="read-only-item">
+            <div class="read-only-label">店铺站点</div>
+            <div class="read-only-value">{{ row.store_site or "-" }}</div>
+          </div>
+          <div class="read-only-item">
+            <div class="read-only-label">Listing</div>
+            <div class="read-only-value">{{ row.listing or "-" }}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">负责人维护</h3>
+        <p class="form-section-subtitle">维护负责人、Listing 状态和日常维护人。</p>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">负责人</span>
+          <input class="field-input" name="owner" value="{{ value(row.owner) }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing 状态</span>
+          <input class="field-input" name="listing_status" value="{{ value(row.listing_status) }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing 维护人</span>
+          <input class="field-input" name="listing_maintainer" value="{{ value(row.listing_maintainer) }}">
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">考核与项目组</h3>
+        <p class="form-section-subtitle">维护库龄考核归属和项目组信息。</p>
+      </div>
+
+      <div class="form-grid form-grid-2">
+        <label class="field">
+          <span class="field-label">是否纳入库龄考核</span>
+          <input class="field-input" name="include_inventory_age_assessment" value="{{ value(row.include_inventory_age_assessment) }}">
+        </label>
+        <label class="field">
+          <span class="field-label">项目组</span>
+          <input class="field-input" name="project_group" value="{{ value(row.project_group) }}">
+        </label>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <a class="btn-secondary" href="/listing-owners">取消</a>
       <button class="btn-primary" type="submit">保存</button>
     </div>
   </form>
