@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from math import ceil
+
 from sqlalchemy import text
 
 from app.core.db import get_engine
@@ -12,27 +15,34 @@ EDITABLE_FIELDS = (
     "project_group",
 )
 
+LISTING_OWNER_PAGE_SIZES = (50, 100, 200)
 
-def list_listing_owners(q: str | None = None) -> list[dict[str, object]]:
+
+@dataclass(frozen=True)
+class ListingOwnerFilters:
+    q: str | None = None
+    store_site: str | None = None
+    owner: str | None = None
+    listing_status: str | None = None
+    listing_maintainer: str | None = None
+    include_inventory_age_assessment: str | None = None
+    project_group: str | None = None
+    page: int = 1
+    page_size: int = 50
+
+
+def list_listing_owners(filters: ListingOwnerFilters | str | None = None) -> dict[str, object]:
+    filters = normalize_filters(filters)
     engine = get_engine()
     if engine is None:
-        return []
+        return _empty_page(filters)
 
-    q = _clean(q)
-    params: dict[str, object] = {}
-    where_sql = ""
-    if q:
-        where_sql = """
-        WHERE store_site LIKE :q
-           OR listing LIKE :q
-           OR owner LIKE :q
-           OR listing_status LIKE :q
-           OR listing_maintainer LIKE :q
-           OR project_group LIKE :q
-        """
-        params["q"] = f"%{q}%"
+    where_sql, params = _build_where(filters)
+    offset = (filters.page - 1) * filters.page_size
+    params.update({"limit": filters.page_size, "offset": offset})
 
-    sql = text(
+    count_sql = text(f"SELECT COUNT(*) FROM amazon_listing_owner_config {where_sql}")
+    list_sql = text(
         f"""
         SELECT
             id,
@@ -47,10 +57,77 @@ def list_listing_owners(q: str | None = None) -> list[dict[str, object]]:
         FROM amazon_listing_owner_config
         {where_sql}
         ORDER BY store_site, listing
+        LIMIT :limit OFFSET :offset
         """
     )
     with engine.connect() as conn:
-        return [dict(row) for row in conn.execute(sql, params).mappings()]
+        total = conn.execute(count_sql, params).scalar_one()
+        rows = [dict(row) for row in conn.execute(list_sql, params).mappings()]
+
+    pages = ceil(total / filters.page_size) if total else 0
+    return {
+        "rows": rows,
+        "total": total,
+        "page": filters.page,
+        "page_size": filters.page_size,
+        "pages": pages,
+    }
+
+
+def get_filter_options() -> dict[str, list[str]]:
+    engine = get_engine()
+    if engine is None:
+        return _empty_options()
+
+    queries = {
+        "store_sites": "SELECT DISTINCT store_site AS value FROM amazon_listing_owner_config WHERE store_site IS NOT NULL AND store_site <> '' ORDER BY store_site LIMIT 300",
+        "owners": "SELECT DISTINCT owner AS value FROM amazon_listing_owner_config WHERE owner IS NOT NULL AND owner <> '' ORDER BY owner LIMIT 300",
+        "listing_statuses": "SELECT DISTINCT listing_status AS value FROM amazon_listing_owner_config WHERE listing_status IS NOT NULL AND listing_status <> '' ORDER BY listing_status LIMIT 100",
+        "listing_maintainers": "SELECT DISTINCT listing_maintainer AS value FROM amazon_listing_owner_config WHERE listing_maintainer IS NOT NULL AND listing_maintainer <> '' ORDER BY listing_maintainer LIMIT 300",
+        "inventory_age_assessments": "SELECT DISTINCT include_inventory_age_assessment AS value FROM amazon_listing_owner_config WHERE include_inventory_age_assessment IS NOT NULL AND include_inventory_age_assessment <> '' ORDER BY include_inventory_age_assessment LIMIT 50",
+        "project_groups": "SELECT DISTINCT project_group AS value FROM amazon_listing_owner_config WHERE project_group IS NOT NULL AND project_group <> '' ORDER BY project_group LIMIT 100",
+    }
+    with engine.connect() as conn:
+        return {
+            key: [row["value"] for row in conn.execute(text(sql)).mappings()]
+            for key, sql in queries.items()
+        }
+
+
+def _build_where(filters: ListingOwnerFilters) -> tuple[str, dict[str, object]]:
+    clauses: list[str] = []
+    params: dict[str, object] = {}
+    if filters.q:
+        clauses.append(
+            """
+            (
+                store_site LIKE :q
+                OR listing LIKE :q
+                OR owner LIKE :q
+                OR listing_status LIKE :q
+                OR listing_maintainer LIKE :q
+                OR project_group LIKE :q
+            )
+            """
+        )
+        params["q"] = f"%{filters.q}%"
+
+    exact_filters = {
+        "store_site": filters.store_site,
+        "owner": filters.owner,
+        "listing_status": filters.listing_status,
+        "listing_maintainer": filters.listing_maintainer,
+        "include_inventory_age_assessment": filters.include_inventory_age_assessment,
+        "project_group": filters.project_group,
+    }
+    for field, value in exact_filters.items():
+        if value:
+            clauses.append(f"{field} = :{field}")
+            params[field] = value
+
+    if not clauses:
+        return "", params
+    return "WHERE " + " AND ".join(clauses), params
 
 
 def get_listing_owner(row_id: int) -> dict[str, object] | None:
@@ -145,3 +222,41 @@ def _clean(value: str | None) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def normalize_filters(filters: ListingOwnerFilters | str | None) -> ListingOwnerFilters:
+    if not isinstance(filters, ListingOwnerFilters):
+        filters = ListingOwnerFilters(q=filters)
+    page_size = filters.page_size if filters.page_size in LISTING_OWNER_PAGE_SIZES else 50
+    return ListingOwnerFilters(
+        q=_clean(filters.q),
+        store_site=_clean(filters.store_site),
+        owner=_clean(filters.owner),
+        listing_status=_clean(filters.listing_status),
+        listing_maintainer=_clean(filters.listing_maintainer),
+        include_inventory_age_assessment=_clean(filters.include_inventory_age_assessment),
+        project_group=_clean(filters.project_group),
+        page=max(filters.page, 1),
+        page_size=page_size,
+    )
+
+
+def _empty_page(filters: ListingOwnerFilters) -> dict[str, object]:
+    return {
+        "rows": [],
+        "total": 0,
+        "page": filters.page,
+        "page_size": filters.page_size,
+        "pages": 0,
+    }
+
+
+def _empty_options() -> dict[str, list[str]]:
+    return {
+        "store_sites": [],
+        "owners": [],
+        "listing_statuses": [],
+        "listing_maintainers": [],
+        "inventory_age_assessments": [],
+        "project_groups": [],
+    }

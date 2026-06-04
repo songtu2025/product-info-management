@@ -5,39 +5,290 @@ from sqlalchemy import create_engine, text
 
 from app.main import app
 from app.modules.listing_owner import service
-from app.modules.listing_owner.service import build_update_payload, update_listing_owner
+from app.modules.listing_owner.service import ListingOwnerFilters, build_update_payload, update_listing_owner
 
 
 client = TestClient(app)
 
 
 def test_listing_owner_list_renders_rows(monkeypatch):
+    captured = {}
+
+    def fake_list_listing_owners(filters):
+        captured["filters"] = filters
+        return {
+            "rows": [
+                {
+                    "id": 1,
+                    "store_site": "SAYOLA:US",
+                    "listing": "RB833",
+                    "owner": "张三",
+                    "listing_status": "正常",
+                    "listing_maintainer": "李四",
+                    "include_inventory_age_assessment": "是",
+                    "project_group": "项目组A",
+                    "updated_at": None,
+                }
+            ],
+            "total": 51,
+            "page": 2,
+            "page_size": 50,
+            "pages": 2,
+        }
+
     monkeypatch.setattr(
         "app.modules.listing_owner.routes.list_listing_owners",
-        lambda q=None: [
-            {
-                "id": 1,
-                "store_site": "SAYOLA:US",
-                "listing": "RB833",
-                "owner": "张三",
-                "listing_status": "正常",
-                "listing_maintainer": "李四",
-                "include_inventory_age_assessment": "是",
-                "project_group": "项目组A",
-                "updated_at": None,
-            }
-        ],
+        fake_list_listing_owners,
     )
 
-    response = client.get("/listing-owners")
+    response = client.get(
+        "/listing-owners",
+        params={"q": "RB", "page": "2", "page_size": "50"},
+    )
 
     assert response.status_code == 200
+    assert not isinstance(captured["filters"], str)
+    assert captured["filters"].q == "RB"
+    assert captured["filters"].page == 2
+    assert captured["filters"].page_size == 50
     assert "SAYOLA:US" in response.text
     assert "RB833" in response.text
     assert "张三" in response.text
+    assert "共 51 条，每页 50 行，当前第 2 页" in response.text
+    assert 'name="page_size"' in response.text
+    assert "首页" in response.text
+    assert "末页" in response.text
+    assert "跳转" in response.text
+    assert "q=RB&amp;page_size=50&amp;page=1" in response.text
     assert "/listing-owners/1/edit" in response.text
     assert "日志" in response.text
     assert "/operation-logs?table_name=amazon_listing_owner_config&amp;record_id=1" in response.text
+
+
+def test_listing_owner_list_passes_structured_filters_and_renders_options(monkeypatch):
+    captured = {}
+
+    def fake_list_listing_owners(filters):
+        captured["filters"] = filters
+        return {
+            "rows": [],
+            "total": 0,
+            "page": filters.page,
+            "page_size": filters.page_size,
+            "pages": 0,
+        }
+
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.list_listing_owners",
+        fake_list_listing_owners,
+    )
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.get_filter_options",
+        lambda: {
+            "store_sites": ["SAYOLA:US"],
+            "owners": ["张三"],
+            "listing_statuses": ["正常"],
+            "listing_maintainers": ["李四"],
+            "inventory_age_assessments": ["是"],
+            "project_groups": ["项目组A"],
+        },
+    )
+
+    response = client.get(
+        "/listing-owners",
+        params={
+            "q": "RB",
+            "store_site": "SAYOLA:US",
+            "owner": "张三",
+            "listing_status": "正常",
+            "listing_maintainer": "李四",
+            "include_inventory_age_assessment": "是",
+            "project_group": "项目组A",
+            "page": "2",
+            "page_size": "50",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["filters"].q == "RB"
+    assert captured["filters"].store_site == "SAYOLA:US"
+    assert captured["filters"].owner == "张三"
+    assert captured["filters"].listing_status == "正常"
+    assert captured["filters"].listing_maintainer == "李四"
+    assert captured["filters"].include_inventory_age_assessment == "是"
+    assert captured["filters"].project_group == "项目组A"
+    assert "店铺站点" in response.text
+    assert "负责人" in response.text
+    assert "状态" in response.text
+    assert "维护人" in response.text
+    assert "纳入库龄考核" in response.text
+    assert "项目组" in response.text
+    assert 'option value="SAYOLA:US" selected' in response.text
+    assert 'option value="张三" selected' in response.text
+    assert "store_site=SAYOLA%3AUS" in response.text
+    assert "include_inventory_age_assessment=%E6%98%AF" in response.text
+
+
+def test_list_listing_owners_returns_paginated_filtered_page(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        for row_id in range(1, 52):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO amazon_listing_owner_config (
+                        id, store_site, listing, owner, listing_status,
+                        listing_maintainer, include_inventory_age_assessment, project_group, updated_at
+                    )
+                    VALUES (
+                        :id, 'SAYOLA:US', :listing, :owner, '正常',
+                        '李四', '是', '项目组A', '2026-06-04'
+                    )
+                    """
+                ),
+                {"id": row_id, "listing": f"RB{row_id:03d}", "owner": f"负责人{row_id}"},
+            )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    id, store_site, listing, owner, listing_status,
+                    listing_maintainer, include_inventory_age_assessment, project_group, updated_at
+                )
+                VALUES (100, 'OTHER:US', 'XX1', '其他', '暂停', '赵六', '否', '项目组B', '2026-06-04')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    page = service.list_listing_owners(ListingOwnerFilters(q="RB", page=2, page_size=50))
+
+    assert isinstance(page, dict)
+    assert page["total"] == 51
+    assert page["page"] == 2
+    assert page["page_size"] == 50
+    assert page["pages"] == 2
+    assert [row["listing"] for row in page["rows"]] == ["RB051"]
+
+
+def test_list_listing_owners_applies_structured_filters(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    id, store_site, listing, owner, listing_status,
+                    listing_maintainer, include_inventory_age_assessment, project_group, updated_at
+                )
+                VALUES
+                    (1, 'SAYOLA:US', 'RB833', '张三', '正常', '李四', '是', '项目组A', '2026-06-04'),
+                    (2, 'SAYOLA:US', 'RB832', '王五', '正常', '李四', '是', '项目组A', '2026-06-04'),
+                    (3, 'OTHER:US', 'RB833', '张三', '暂停', '赵六', '否', '项目组B', '2026-06-04')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    page = service.list_listing_owners(
+        ListingOwnerFilters(
+            q="RB",
+            store_site="SAYOLA:US",
+            owner="张三",
+            listing_status="正常",
+            listing_maintainer="李四",
+            include_inventory_age_assessment="是",
+            project_group="项目组A",
+        )
+    )
+
+    assert page["total"] == 1
+    assert [row["id"] for row in page["rows"]] == [1]
+
+
+def test_get_filter_options_returns_distinct_values(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    id, store_site, listing, owner, listing_status,
+                    listing_maintainer, include_inventory_age_assessment, project_group, updated_at
+                )
+                VALUES
+                    (1, 'SAYOLA:US', 'RB833', '张三', '正常', '李四', '是', '项目组A', '2026-06-04'),
+                    (2, 'SAYOLA:US', 'RB832', '张三', '正常', '李四', '是', '项目组A', '2026-06-04'),
+                    (3, 'OTHER:US', 'RB831', '王五', '暂停', '赵六', '否', '项目组B', '2026-06-04')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    options = service.get_filter_options()
+
+    assert options == {
+        "store_sites": ["OTHER:US", "SAYOLA:US"],
+        "owners": ["张三", "王五"],
+        "listing_statuses": ["暂停", "正常"],
+        "listing_maintainers": ["李四", "赵六"],
+        "inventory_age_assessments": ["否", "是"],
+        "project_groups": ["项目组A", "项目组B"],
+    }
 
 
 def test_listing_owner_edit_page_does_not_allow_key_edit(monkeypatch):

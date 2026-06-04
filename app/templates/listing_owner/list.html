@@ -2,14 +2,85 @@
 
 {% block content %}
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
-  <form class="filter-panel mb-4 grid gap-3 md:grid-cols-[1fr_auto]" method="get">
-    <label class="field">
-      <span class="field-label">搜索</span>
-      <input class="field-input" name="q" type="search" value="{{ q }}" placeholder="店铺站点 / Listing / 负责人 / 状态 / 维护人 / 项目组">
-    </label>
-    <div class="flex items-end gap-2">
-      <button class="btn-primary" type="submit">查询</button>
-      <a class="btn-secondary" href="/listing-owners">重置</a>
+  <form class="filter-panel mb-4" method="get">
+    <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h2 class="text-base font-bold text-slate-950">筛选负责人配置</h2>
+        <p class="mt-1 text-sm text-slate-500">按店铺站点、Listing、负责人、状态、维护人或项目组搜索。</p>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn-primary" type="submit">查询</button>
+        <a class="btn-secondary" href="/listing-owners">重置</a>
+      </div>
+    </div>
+
+    <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <label class="field md:col-span-2">
+        <span class="field-label">关键词</span>
+        <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="店铺站点 / Listing / 负责人 / 状态 / 维护人 / 项目组">
+      </label>
+      <label class="field">
+        <span class="field-label">店铺站点</span>
+        <select class="field-input" name="store_site">
+          <option value="">全部</option>
+          {% for value in options.store_sites %}
+            <option value="{{ value }}" {% if filters.store_site == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">负责人</span>
+        <select class="field-input" name="owner">
+          <option value="">全部</option>
+          {% for value in options.owners %}
+            <option value="{{ value }}" {% if filters.owner == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">状态</span>
+        <select class="field-input" name="listing_status">
+          <option value="">全部</option>
+          {% for value in options.listing_statuses %}
+            <option value="{{ value }}" {% if filters.listing_status == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">维护人</span>
+        <select class="field-input" name="listing_maintainer">
+          <option value="">全部</option>
+          {% for value in options.listing_maintainers %}
+            <option value="{{ value }}" {% if filters.listing_maintainer == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">纳入库龄考核</span>
+        <select class="field-input" name="include_inventory_age_assessment">
+          <option value="">全部</option>
+          {% for value in options.inventory_age_assessments %}
+            <option value="{{ value }}" {% if filters.include_inventory_age_assessment == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">项目组</span>
+        <select class="field-input" name="project_group">
+          <option value="">全部</option>
+          {% for value in options.project_groups %}
+            <option value="{{ value }}" {% if filters.project_group == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">每页行数</span>
+        <select class="field-input" name="page_size">
+          {% for size in page_sizes %}
+            <option value="{{ size }}" {% if owners.page_size == size %}selected{% endif %}>{{ size }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
   </form>
 
@@ -17,7 +88,9 @@
     <div class="panel-heading">
       <div>
         <h2 class="panel-title">Listing 负责人</h2>
-        <p class="panel-subtitle">共 {{ rows|length }} 条。店铺站点和 Listing 暂不允许编辑。</p>
+        <p class="panel-subtitle">
+          共 {{ owners.total }} 条，每页 {{ owners.page_size }} 行，当前第 {{ owners.page }} 页。店铺站点和 Listing 暂不允许编辑。
+        </p>
       </div>
     </div>
 
@@ -75,6 +148,53 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+
+    <div class="flex flex-col gap-3 px-4 py-3 text-sm lg:flex-row lg:items-center lg:justify-between">
+      <div class="flex flex-wrap items-center gap-2">
+        <a
+          class="btn-secondary {% if owners.page <= 1 %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.first_url }}"
+        >首页</a>
+        <a
+          class="btn-secondary {% if owners.page <= 1 %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.prev_url }}"
+        >上一页</a>
+        {% for item in pagination.page_numbers %}
+          <a
+            class="btn-secondary {% if item.page == owners.page %}bg-slate-900 text-white{% endif %}"
+            href="{{ item.url }}"
+          >{{ item.page }}</a>
+        {% endfor %}
+        <a
+          class="btn-secondary {% if owners.pages == 0 or owners.page >= owners.pages %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.next_url }}"
+        >下一页</a>
+        <a
+          class="btn-secondary {% if owners.pages == 0 or owners.page >= owners.pages %}pointer-events-none opacity-50{% endif %}"
+          href="{{ pagination.last_url }}"
+        >末页</a>
+      </div>
+      <form class="flex items-center gap-2" method="get">
+        <input name="q" type="hidden" value="{{ filters.q or '' }}">
+        <input name="store_site" type="hidden" value="{{ filters.store_site or '' }}">
+        <input name="owner" type="hidden" value="{{ filters.owner or '' }}">
+        <input name="listing_status" type="hidden" value="{{ filters.listing_status or '' }}">
+        <input name="listing_maintainer" type="hidden" value="{{ filters.listing_maintainer or '' }}">
+        <input name="include_inventory_age_assessment" type="hidden" value="{{ filters.include_inventory_age_assessment or '' }}">
+        <input name="project_group" type="hidden" value="{{ filters.project_group or '' }}">
+        <input name="page_size" type="hidden" value="{{ owners.page_size }}">
+        <span class="text-slate-500">第 {{ owners.page }} / {{ owners.pages if owners.pages else 1 }} 页</span>
+        <input
+          class="field-input h-9 w-20"
+          min="1"
+          max="{{ owners.pages if owners.pages else 1 }}"
+          name="page"
+          type="number"
+          value="{{ owners.page }}"
+        >
+        <button class="btn-secondary" type="submit">跳转</button>
+      </form>
     </div>
   </div>
 {% endblock %}
