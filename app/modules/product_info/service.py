@@ -62,8 +62,9 @@ EXPORT_COLUMNS = (
     ("updated_at", "更新时间"),
 )
 
+DEFAULT_EXPORT_FIELDS = tuple(field for field, _ in EXPORT_COLUMNS)
+EXPORT_COLUMN_MAP = {column["key"]: column["label"] for column in PRODUCT_LIST_COLUMNS}
 LIST_COLUMNS = ",\n    ".join(column["key"] for column in PRODUCT_LIST_COLUMNS)
-EXPORT_SELECT_COLUMNS = ",\n    ".join(field for field, _ in EXPORT_COLUMNS)
 
 EDITABLE_FIELDS = (
     "product_name",
@@ -149,16 +150,21 @@ def list_products(filters: ProductFilters) -> dict[str, object]:
     }
 
 
-def list_products_for_export(filters: ProductFilters) -> list[dict[str, object]]:
+def list_products_for_export(
+    filters: ProductFilters,
+    export_fields: list[str] | tuple[str, ...] | None = None,
+) -> list[dict[str, object]]:
     filters = normalize_filters(filters)
     engine = get_engine()
     if engine is None:
         return []
 
+    export_columns = resolve_export_columns(export_fields)
+    export_select_columns = ",\n    ".join(field for field, _ in export_columns)
     where_sql, params = _build_where(filters)
     export_sql = text(
         f"""
-        SELECT {EXPORT_SELECT_COLUMNS}
+        SELECT {export_select_columns}
         FROM amazon_product_info
         {where_sql}
         ORDER BY updated_at DESC, id DESC
@@ -169,19 +175,35 @@ def list_products_for_export(filters: ProductFilters) -> list[dict[str, object]]
         return [dict(row) for row in conn.execute(export_sql, params).mappings()]
 
 
-def export_products_to_xlsx(filters: ProductFilters) -> bytes:
-    rows = list_products_for_export(filters)
+def export_products_to_xlsx(
+    filters: ProductFilters,
+    export_fields: list[str] | tuple[str, ...] | None = None,
+) -> bytes:
+    export_columns = resolve_export_columns(export_fields)
+    rows = list_products_for_export(filters, export_fields)
 
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "产品信息"
-    sheet.append([header for _, header in EXPORT_COLUMNS])
+    sheet.append([header for _, header in export_columns])
     for row in rows:
-        sheet.append([row.get(field) for field, _ in EXPORT_COLUMNS])
+        sheet.append([row.get(field) for field, _ in export_columns])
 
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
+
+
+def resolve_export_columns(export_fields: list[str] | tuple[str, ...] | None = None) -> tuple[tuple[str, str], ...]:
+    selected_fields = export_fields or DEFAULT_EXPORT_FIELDS
+    columns = tuple(
+        (field, EXPORT_COLUMN_MAP[field])
+        for field in selected_fields
+        if field in EXPORT_COLUMN_MAP
+    )
+    if columns:
+        return columns
+    return EXPORT_COLUMNS
 
 
 def get_filter_options() -> dict[str, list[str]]:

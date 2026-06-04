@@ -50,12 +50,6 @@
               <h1 class="mt-1 text-lg font-bold text-slate-950">{{ app_name }}</h1>
             </div>
             <div class="hidden items-center gap-2 md:flex">
-              {% if export_url is defined %}
-                <a class="btn-secondary" href="{{ export_url }}">导出</a>
-              {% endif %}
-              {% if create_url is defined and (request.app.state.disable_auth or (current_user and current_user.role == "admin")) %}
-                <a class="btn-primary" href="{{ create_url }}">新增</a>
-              {% endif %}
               {% if current_user %}
                 <div class="user-chip ml-2 text-right text-xs leading-5 text-slate-500">
                   <div class="font-semibold text-slate-800">{{ current_user.username }}</div>

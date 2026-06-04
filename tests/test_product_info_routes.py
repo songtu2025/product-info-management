@@ -119,6 +119,33 @@ def test_product_list_exposes_column_customization_controls(monkeypatch):
     assert "min-width: 1120px" not in response.text
 
 
+def test_product_list_exposes_export_field_controls(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_products",
+        lambda filters: {
+            "rows": [],
+            "total": 0,
+            "page": 1,
+            "page_size": 50,
+            "pages": 0,
+        },
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {"store_sites": [], "brands": [], "sales_statuses": [], "listings": []},
+    )
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "导出字段" in response.text
+    assert "data-export-fields-panel" in response.text
+    assert 'name="export_fields"' in response.text
+    assert 'value="msku"' in response.text
+    assert 'value="storage_type"' in response.text
+    assert "buildExportUrl" in response.text
+
+
 def test_product_list_passes_search_and_filter_params(monkeypatch):
     captured = {}
 
@@ -199,7 +226,7 @@ def test_product_list_passes_page_size_and_keeps_it_in_pagination(monkeypatch):
 
 
 def test_product_list_loads_saved_column_state(monkeypatch):
-    captured = {}
+    captured = []
 
     monkeypatch.setattr(
         "app.modules.product_info.routes.list_products",
@@ -211,8 +238,9 @@ def test_product_list_loads_saved_column_state(monkeypatch):
     )
 
     def fake_get_preference(username, key):
-        captured["username"] = username
-        captured["key"] = key
+        captured.append((username, key))
+        if key == "product_info.export.fields":
+            return None
         return {"visible": {"id": True}, "order": ["id", "msku"], "widths": {"id": 88}}
 
     monkeypatch.setattr("app.modules.product_info.routes.get_user_preference", fake_get_preference)
@@ -220,13 +248,37 @@ def test_product_list_loads_saved_column_state(monkeypatch):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert captured == {
-        "username": "test-admin",
-        "key": "product_info.list.columns",
-    }
+    assert ("test-admin", "product_info.list.columns") in captured
     assert "serverColumnState" in response.text
     assert '"visible": {"id": true}' in response.text
     assert '"order": ["id", "msku"]' in response.text
+
+
+def test_product_list_loads_saved_export_fields(monkeypatch):
+    captured = []
+
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_products",
+        lambda filters: {"rows": [], "total": 0, "page": 1, "page_size": 50, "pages": 0},
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {"store_sites": [], "brands": [], "sales_statuses": [], "listings": []},
+    )
+
+    def fake_get_preference(username, key):
+        captured.append((username, key))
+        if key == "product_info.export.fields":
+            return {"fields": ["msku", "storage_type"]}
+        return {}
+
+    monkeypatch.setattr("app.modules.product_info.routes.get_user_preference", fake_get_preference)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert ("test-admin", "product_info.export.fields") in captured
+    assert 'const savedExportFields = ["msku", "storage_type"];' in response.text
 
 
 def test_product_column_preference_save_persists_for_current_user(monkeypatch):
@@ -254,11 +306,37 @@ def test_product_column_preference_save_persists_for_current_user(monkeypatch):
     }
 
 
+def test_product_export_field_preference_save_persists_for_current_user(monkeypatch):
+    captured = {}
+
+    def fake_save_preference(username, key, value):
+        captured["username"] = username
+        captured["key"] = key
+        captured["value"] = value
+        return True
+
+    monkeypatch.setattr("app.modules.product_info.routes.save_user_preference", fake_save_preference)
+
+    response = client.post(
+        "/products/preferences/export-fields",
+        json={"fields": ["msku", "storage_type", "not_a_column"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert captured == {
+        "username": "test-admin",
+        "key": "product_info.export.fields",
+        "value": {"fields": ["msku", "storage_type"]},
+    }
+
+
 def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
     captured = {}
 
-    def fake_export_products(filters):
+    def fake_export_products(filters, export_fields=None):
         captured["filters"] = filters
+        captured["export_fields"] = export_fields
         return b"xlsx-bytes"
 
     monkeypatch.setattr(
@@ -275,6 +353,7 @@ def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
             "sales_status": "在售",
             "listing": "ListingA",
             "page": "4",
+            "export_fields": ["msku", "storage_type"],
         },
     )
 
@@ -290,3 +369,4 @@ def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
     assert captured["filters"].sales_status == "在售"
     assert captured["filters"].listing == "ListingA"
     assert captured["filters"].page == 1
+    assert captured["export_fields"] == ["msku", "storage_type"]

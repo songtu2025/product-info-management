@@ -1,6 +1,6 @@
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.core.config import get_settings
@@ -9,6 +9,7 @@ from app.core.templates import templates
 from app.modules.product_info.service import (
     DuplicateProductError,
     ProductFilters,
+    DEFAULT_EXPORT_FIELDS,
     PRODUCT_LIST_COLUMNS,
     PRODUCT_PAGE_SIZES,
     build_create_payload,
@@ -26,6 +27,8 @@ from app.shared.user_preference import get_user_preference, save_user_preference
 
 router = APIRouter()
 COLUMN_PREFERENCE_KEY = "product_info.list.columns"
+EXPORT_FIELD_PREFERENCE_KEY = "product_info.export.fields"
+EXPORT_FIELD_KEYS = {column["key"] for column in PRODUCT_LIST_COLUMNS}
 
 
 def build_product_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
@@ -70,6 +73,7 @@ def product_list(
         page_size=int(products["page_size"]),
     )
     username = _preference_username(request)
+    export_field_state = get_user_preference(username, EXPORT_FIELD_PREFERENCE_KEY) if username else {}
 
     return templates.TemplateResponse(
         request,
@@ -80,6 +84,8 @@ def product_list(
             "filters": filters,
             "products": products,
             "product_list_columns": PRODUCT_LIST_COLUMNS,
+            "default_export_fields": DEFAULT_EXPORT_FIELDS,
+            "saved_export_fields": _saved_export_fields(export_field_state),
             "product_page_sizes": PRODUCT_PAGE_SIZES,
             "column_state": get_user_preference(username, COLUMN_PREFERENCE_KEY) if username else {},
             "pagination": _build_pagination(normalized_filters, int(products["pages"])),
@@ -105,6 +111,26 @@ async def product_column_preference_save(request: Request):
     return {"ok": True}
 
 
+@router.post("/products/preferences/export-fields")
+async def product_export_field_preference_save(request: Request):
+    username = _preference_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    state = await request.json()
+    if not isinstance(state, dict):
+        raise HTTPException(status_code=400, detail="Invalid preference")
+
+    fields = state.get("fields")
+    if not isinstance(fields, list):
+        raise HTTPException(status_code=400, detail="Invalid preference")
+
+    safe_fields = [field for field in fields if isinstance(field, str) and field in EXPORT_FIELD_KEYS]
+    if not save_user_preference(username, EXPORT_FIELD_PREFERENCE_KEY, {"fields": safe_fields}):
+        raise HTTPException(status_code=500, detail="Save failed")
+    return {"ok": True}
+
+
 @router.get("/products/export")
 def product_export(
     q: str | None = None,
@@ -112,6 +138,7 @@ def product_export(
     brand: str | None = None,
     sales_status: str | None = None,
     listing: str | None = None,
+    export_fields: list[str] | None = Query(None),
 ):
     filters = ProductFilters(
         q=q,
@@ -121,7 +148,11 @@ def product_export(
         listing=listing,
         page=1,
     )
-    content = export_products_to_xlsx(filters)
+    content = (
+        export_products_to_xlsx(filters, export_fields)
+        if export_fields
+        else export_products_to_xlsx(filters)
+    )
     return Response(
         content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -134,6 +165,13 @@ def _preference_username(request: Request) -> str | None:
         return "test-admin"
     user = current_user(request)
     return user.username if user else None
+
+
+def _saved_export_fields(state: dict[str, object] | None) -> list[str]:
+    if not state or not isinstance(state.get("fields"), list):
+        return list(DEFAULT_EXPORT_FIELDS)
+    fields = [field for field in state["fields"] if isinstance(field, str) and field in EXPORT_FIELD_KEYS]
+    return fields or list(DEFAULT_EXPORT_FIELDS)
 
 
 def _build_pagination(filters: ProductFilters, pages: int) -> dict[str, object]:

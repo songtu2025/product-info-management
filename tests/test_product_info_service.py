@@ -1,9 +1,13 @@
+from io import BytesIO
+
+from openpyxl import load_workbook
 from sqlalchemy import create_engine, text
 
 from app.modules.product_info import service
 from app.modules.product_info.service import (
     ProductFilters,
     _build_where,
+    export_products_to_xlsx,
     list_products,
     list_products_for_export,
     normalize_filters,
@@ -163,3 +167,59 @@ def test_list_products_for_export_uses_filters_without_pagination(monkeypatch):
     assert len(rows) == 1
     assert rows[0]["msku"] == "MSKU-001"
     assert rows[0]["brand"] == "BrandA"
+
+
+def test_export_products_to_xlsx_uses_selected_safe_fields(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    msku TEXT,
+                    asin TEXT,
+                    store_site TEXT,
+                    parent_asin TEXT,
+                    product_name TEXT,
+                    sku TEXT,
+                    brand TEXT,
+                    fnsku TEXT,
+                    sales_status TEXT,
+                    storage_type TEXT,
+                    category_level_1 TEXT,
+                    category_a TEXT,
+                    category_b TEXT,
+                    listing TEXT,
+                    label_name TEXT,
+                    msku_shipping_remark TEXT,
+                    transfer_remark TEXT,
+                    msku_lock_status TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, msku, asin, store_site, product_name, storage_type, updated_at
+                )
+                VALUES (1, 'MSKU-001', 'B001', 'SAYOLA:US', 'Product 1', 'FBA', '2026-06-04')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    content = export_products_to_xlsx(
+        ProductFilters(),
+        ["msku", "storage_type", "not_a_column"],
+    )
+    workbook = load_workbook(BytesIO(content))
+    sheet = workbook.active
+
+    assert [cell.value for cell in sheet[1]] == ["MSKU", "仓储类型"]
+    assert [cell.value for cell in sheet[2]] == ["MSKU-001", "FBA"]
