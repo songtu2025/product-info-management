@@ -7,6 +7,7 @@ from openpyxl import Workbook, load_workbook
 from sqlalchemy import bindparam, text
 
 from app.core.db import get_engine
+from app.modules.product_info.service import LOCK_CONFLICT_MESSAGE, is_locked_msku
 from app.shared.audit import build_change_set, record_operation_log
 
 
@@ -142,6 +143,21 @@ def preview_product_import(content: bytes) -> dict[str, Any]:
                 "msku": msku,
                 "changes": changes,
             }
+        )
+
+    conflict_row_numbers = _find_lock_conflict_row_numbers(valid_rows)
+    if conflict_row_numbers:
+        valid_rows = [
+            row
+            for row in valid_rows
+            if row["row_number"] not in conflict_row_numbers
+        ]
+        error_rows.extend(
+            {
+                "row_number": row_number,
+                "message": LOCK_CONFLICT_MESSAGE,
+            }
+            for row_number in sorted(conflict_row_numbers)
         )
 
     return {
@@ -337,6 +353,67 @@ def _load_existing_keys(rows: list[dict[str, Any]]) -> set[tuple[str, str]]:
         }
 
     return matched & keys
+
+
+def _find_lock_conflict_row_numbers(rows: list[dict[str, Any]]) -> set[int]:
+    if not rows:
+        return set()
+
+    engine = get_engine()
+    if engine is None:
+        return set()
+
+    store_sites = sorted({row["store_site"] for row in rows})
+    query = text(
+        """
+        SELECT id, store_site, msku, sku, msku_lock_status
+        FROM amazon_product_info
+        WHERE store_site IN :store_sites
+        """
+    ).bindparams(bindparam("store_sites", expanding=True))
+
+    with engine.connect() as conn:
+        products = [
+            dict(row)
+            for row in conn.execute(query, {"store_sites": store_sites}).mappings()
+        ]
+
+    by_key = {
+        (product["store_site"], product["msku"]): product
+        for product in products
+    }
+    imported_ids_by_row = {}
+    for row in rows:
+        product = by_key.get((row["store_site"], row["msku"]))
+        if not product:
+            continue
+        imported_ids_by_row[row["row_number"]] = product["id"]
+        if "sku" in row["changes"]:
+            product["sku"] = row["changes"]["sku"]
+        if "msku_lock_status" in row["changes"]:
+            product["msku_lock_status"] = row["changes"]["msku_lock_status"]
+
+    locked_ids_by_group: dict[tuple[str, str], list[int]] = {}
+    for product in products:
+        if not is_locked_msku(product.get("msku_lock_status")):
+            continue
+        store_site = product.get("store_site")
+        sku = product.get("sku")
+        if not store_site or not sku:
+            continue
+        locked_ids_by_group.setdefault((store_site, sku), []).append(product["id"])
+
+    conflict_ids = {
+        product_id
+        for product_ids in locked_ids_by_group.values()
+        if len(product_ids) > 1
+        for product_id in product_ids
+    }
+    return {
+        row_number
+        for row_number, product_id in imported_ids_by_row.items()
+        if product_id in conflict_ids
+    }
 
 
 def _clean_cell(value: object) -> str | None:

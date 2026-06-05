@@ -61,6 +61,7 @@ def test_preview_product_import_validates_rows_without_writing(monkeypatch):
                     sku TEXT,
                     brand TEXT,
                     fnsku TEXT,
+                    msku_lock_status TEXT,
                     listing TEXT
                 )
                 """
@@ -133,6 +134,8 @@ def test_commit_product_import_updates_existing_rows_and_writes_logs(monkeypatch
                     id INTEGER PRIMARY KEY,
                     store_site TEXT,
                     msku TEXT,
+                    sku TEXT,
+                    msku_lock_status TEXT,
                     asin TEXT,
                     product_name TEXT,
                     brand TEXT
@@ -235,6 +238,48 @@ def test_commit_product_import_rejects_invalid_preview_without_writing(monkeypat
             text("SELECT brand FROM amazon_product_info WHERE id = 1")
         ).scalar_one()
     assert brand == "Old Brand"
+
+
+def test_preview_product_import_rejects_locked_conflict(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    msku TEXT,
+                    sku TEXT,
+                    msku_lock_status TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, msku, sku, msku_lock_status)
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'SKU-001', '锁'),
+                    (2, 'SAYOLA:US', 'MSKU-002', 'SKU-001', '否')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    content = build_workbook_bytes(
+        [
+            ["店铺/站点", "MSKU", "锁仓MSKU"],
+            ["SAYOLA:US", "MSKU-002", "锁"],
+        ]
+    )
+
+    preview = preview_product_import(content)
+
+    assert preview["valid_count"] == 0
+    assert preview["error_count"] == 1
+    assert preview["error_rows"][0]["message"] == "同一店铺站点 + SKU 下最多只能有一个锁仓 MSKU 为“锁”。"
 
 
 def test_product_import_page_renders_upload_form():

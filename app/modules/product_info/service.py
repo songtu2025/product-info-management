@@ -13,6 +13,14 @@ class DuplicateProductError(Exception):
     pass
 
 
+class LockConflictError(Exception):
+    pass
+
+
+LOCKED_MSKU_VALUE = "锁"
+LOCK_CONFLICT_MESSAGE = "同一店铺站点 + SKU 下最多只能有一个锁仓 MSKU 为“锁”。"
+
+
 @dataclass(frozen=True)
 class ProductFilters:
     q: str | None = None
@@ -361,6 +369,12 @@ def create_product(
         ).first()
         if duplicate:
             raise DuplicateProductError
+        if is_locked_msku(allowed_payload.get("msku_lock_status")) and _has_locked_msku_conflict(
+            conn,
+            store_site=store_site,
+            sku=allowed_payload.get("sku"),
+        ):
+            raise LockConflictError
 
         result = conn.execute(insert_sql, allowed_payload)
         product_id = result.lastrowid
@@ -399,7 +413,7 @@ def update_product(
 
     select_sql = text(
         f"""
-        SELECT {", ".join(EDITABLE_FIELDS)}
+        SELECT store_site, sku, {", ".join(EDITABLE_FIELDS)}
         FROM amazon_product_info
         WHERE id = :product_id
         """
@@ -417,6 +431,14 @@ def update_product(
         before = conn.execute(select_sql, {"product_id": product_id}).mappings().first()
         if before is None:
             return False
+        desired_lock_status = allowed_payload.get("msku_lock_status", before["msku_lock_status"])
+        if is_locked_msku(desired_lock_status) and _has_locked_msku_conflict(
+            conn,
+            store_site=before["store_site"],
+            sku=before["sku"],
+            exclude_product_id=product_id,
+        ):
+            raise LockConflictError
 
         changes = build_change_set(dict(before), allowed_payload)
         result = conn.execute(update_sql, params)
@@ -472,6 +494,43 @@ def _clean(value: str | None) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def is_locked_msku(value: object) -> bool:
+    return value == LOCKED_MSKU_VALUE
+
+
+def _has_locked_msku_conflict(
+    conn,
+    store_site: object,
+    sku: object,
+    exclude_product_id: int | None = None,
+) -> bool:
+    if not store_site or not sku:
+        return False
+
+    params = {
+        "store_site": store_site,
+        "sku": sku,
+        "lock_status": LOCKED_MSKU_VALUE,
+    }
+    exclude_sql = ""
+    if exclude_product_id is not None:
+        exclude_sql = "AND id <> :exclude_product_id"
+        params["exclude_product_id"] = exclude_product_id
+
+    query = text(
+        f"""
+        SELECT id
+        FROM amazon_product_info
+        WHERE store_site = :store_site
+          AND sku = :sku
+          AND msku_lock_status = :lock_status
+          {exclude_sql}
+        LIMIT 1
+        """
+    )
+    return conn.execute(query, params).first() is not None
 
 
 def _empty_page(filters: ProductFilters) -> dict[str, object]:

@@ -56,6 +56,36 @@ def test_store_site_new_page_renders_create_form():
     assert "name=\"domain\"" in response.text
 
 
+def test_store_site_new_page_provides_auto_fill_data(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.store_site.routes.list_store_sites",
+        lambda: [
+            {
+                "store_site": "SAYOLA:US",
+                "store": "SAYOLA",
+                "country": "US",
+                "domain": "amazon.com",
+            },
+            {
+                "store_site": "RIVBOS:CA",
+                "store": "RIVBOS",
+                "country": "CA",
+                "domain": "amazon.ca",
+            },
+        ],
+    )
+
+    response = client.get("/store-sites/new")
+
+    assert response.status_code == 200
+    assert "store-site-domain-by-country" in response.text
+    assert "US" in response.text
+    assert "amazon.com" in response.text
+    assert "CA" in response.text
+    assert "amazon.ca" in response.text
+    assert "storeSiteInput.addEventListener" in response.text
+
+
 def test_store_site_new_post_creates_and_redirects(monkeypatch):
     captured = {}
 

@@ -9,7 +9,7 @@
     <div>
       <a class="detail-back-link" href="/store-sites">返回店铺站点</a>
       <h2 class="form-title">新增店铺站点</h2>
-      <p class="form-subtitle">新增后会作为产品信息、负责人配置和筛选条件里的店铺站点选项。</p>
+      <p class="form-subtitle">`店铺/站点` 填写后即可决定店铺、国家和域名，并作为产品信息、负责人配置和筛选条件里的店铺站点选项。</p>
     </div>
   </div>
 
@@ -21,21 +21,21 @@
     <section class="form-section">
       <div class="form-section-heading">
         <h3 class="form-section-title">店铺站点标识</h3>
-        <p class="form-section-subtitle">`store_site` 必填且唯一，建议使用“店铺:国家”格式。</p>
+        <p class="form-section-subtitle">`store_site` 必填且唯一，建议使用“店铺:国家”格式，便于稳定映射店铺、国家和域名。</p>
       </div>
 
       <div class="form-grid">
         <label class="field">
           <span class="field-label">店铺站点 <span class="required-mark">*</span></span>
-          <input class="field-input mono" name="store_site" value="{{ value(row.store_site) }}" required>
+          <input class="field-input mono" id="store_site" name="store_site" value="{{ value(row.store_site) }}" required>
         </label>
         <label class="field">
           <span class="field-label">店铺</span>
-          <input class="field-input" name="store" value="{{ value(row.store) }}">
+          <input class="field-input" id="store" name="store" value="{{ value(row.store) }}">
         </label>
         <label class="field">
           <span class="field-label">国家</span>
-          <input class="field-input" name="country" value="{{ value(row.country) }}">
+          <input class="field-input" id="country" name="country" value="{{ value(row.country) }}">
         </label>
       </div>
     </section>
@@ -49,7 +49,7 @@
       <div class="form-grid form-grid-2">
         <label class="field">
           <span class="field-label">域名</span>
-          <input class="field-input" name="domain" value="{{ value(row.domain) }}">
+          <input class="field-input" id="domain" name="domain" value="{{ value(row.domain) }}">
         </label>
       </div>
     </section>
@@ -59,4 +59,28 @@
       <button class="btn-primary" type="submit">保存</button>
     </div>
   </form>
+
+  <script id="store-site-domain-by-country" type="application/json">{{ domain_by_country | tojson }}</script>
+  <script>
+    const storeSiteInput = document.getElementById("store_site");
+    const storeInput = document.getElementById("store");
+    const countryInput = document.getElementById("country");
+    const domainInput = document.getElementById("domain");
+    const domainByCountry = JSON.parse(document.getElementById("store-site-domain-by-country").textContent || "{}");
+
+    function fillStoreSiteFields() {
+      const [store, country] = storeSiteInput.value.trim().split(":");
+      if (!store || !country) {
+        return;
+      }
+
+      const cleanCountry = country.trim().toUpperCase();
+      storeInput.value = store.trim();
+      countryInput.value = cleanCountry;
+      domainInput.value = domainByCountry[cleanCountry] || "";
+    }
+
+    storeSiteInput.addEventListener("input", fillStoreSiteFields);
+    fillStoreSiteFields();
+  </script>
 {% endblock %}

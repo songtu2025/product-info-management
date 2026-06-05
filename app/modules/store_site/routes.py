@@ -18,6 +18,21 @@ from app.modules.store_site.service import (
 router = APIRouter(prefix="/store-sites")
 
 
+def build_store_site_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
+    domain_by_country = {
+        site["country"]: site["domain"]
+        for site in list_store_sites()
+        if site.get("country") and site.get("domain")
+    }
+    return {
+        "app_name": get_settings().app_name,
+        "active_nav": "店铺站点",
+        "row": row or {},
+        "error": error,
+        "domain_by_country": domain_by_country,
+    }
+
+
 @router.get("", response_class=HTMLResponse)
 def store_site_list(request: Request, q: str | None = None):
     rows = list_store_sites(q)
@@ -39,12 +54,7 @@ def store_site_new(request: Request):
     return templates.TemplateResponse(
         request,
         "store_site/new.html",
-        {
-            "app_name": get_settings().app_name,
-            "active_nav": "店铺站点",
-            "row": {},
-            "error": None,
-        },
+        build_store_site_new_context(),
     )
 
 
@@ -60,12 +70,7 @@ async def store_site_create(request: Request):
         return templates.TemplateResponse(
             request,
             "store_site/new.html",
-            {
-                "app_name": get_settings().app_name,
-                "active_nav": "店铺站点",
-                "row": payload,
-                "error": "店铺站点已存在，请检查后再新增。",
-            },
+            build_store_site_new_context(payload, "店铺站点已存在，请检查后再新增。"),
             status_code=400,
         )
 
@@ -75,12 +80,7 @@ async def store_site_create(request: Request):
     return templates.TemplateResponse(
         request,
         "store_site/new.html",
-        {
-            "app_name": get_settings().app_name,
-            "active_nav": "店铺站点",
-            "row": payload,
-            "error": "保存失败，请至少填写店铺站点。",
-        },
+        build_store_site_new_context(payload, "保存失败，请至少填写店铺站点。"),
         status_code=400,
     )
 

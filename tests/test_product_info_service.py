@@ -1,16 +1,20 @@
 from io import BytesIO
 
+import pytest
 from openpyxl import load_workbook
 from sqlalchemy import create_engine, text
 
 from app.modules.product_info import service
 from app.modules.product_info.service import (
+    LockConflictError,
     ProductFilters,
+    create_product,
     _build_where,
     export_products_to_xlsx,
     list_products,
     list_products_for_export,
     normalize_filters,
+    update_product,
 )
 
 
@@ -223,3 +227,96 @@ def test_export_products_to_xlsx_uses_selected_safe_fields(monkeypatch):
 
     assert [cell.value for cell in sheet[1]] == ["MSKU", "仓储类型"]
     assert [cell.value for cell in sheet[2]] == ["MSKU-001", "FBA"]
+
+
+def test_create_product_rejects_second_locked_msku_for_same_store_site_sku(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    store_site TEXT,
+                    msku TEXT,
+                    sku TEXT,
+                    msku_lock_status TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (store_site, msku, sku, msku_lock_status)
+                VALUES ('SAYOLA:US', 'MSKU-001', 'SKU-001', '锁')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    with pytest.raises(LockConflictError):
+        create_product(
+            {
+                "store_site": "SAYOLA:US",
+                "msku": "MSKU-002",
+                "sku": "SKU-001",
+                "msku_lock_status": "锁",
+            }
+        )
+
+    with engine.connect() as conn:
+        row_count = conn.execute(text("SELECT COUNT(*) FROM amazon_product_info")).scalar_one()
+
+    assert row_count == 1
+
+
+def test_update_product_rejects_second_locked_msku_for_same_store_site_sku(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    msku TEXT,
+                    sku TEXT,
+                    product_name TEXT,
+                    brand TEXT,
+                    sales_status TEXT,
+                    storage_type TEXT,
+                    category_level_1 TEXT,
+                    category_a TEXT,
+                    category_b TEXT,
+                    label_name TEXT,
+                    msku_shipping_remark TEXT,
+                    transfer_remark TEXT,
+                    msku_lock_status TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, msku, sku, msku_lock_status)
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'SKU-001', '锁'),
+                    (2, 'SAYOLA:US', 'MSKU-002', 'SKU-001', '否')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    with pytest.raises(LockConflictError):
+        update_product(2, {"msku_lock_status": "锁"})
+
+    with engine.connect() as conn:
+        lock_status = conn.execute(
+            text("SELECT msku_lock_status FROM amazon_product_info WHERE id = 2")
+        ).scalar_one()
+
+    assert lock_status == "否"

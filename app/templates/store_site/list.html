@@ -17,7 +17,7 @@
     <div class="panel-heading">
       <div>
         <h2 class="panel-title">店铺站点</h2>
-        <p class="panel-subtitle">共 {{ rows|length }} 条。店铺站点键暂不允许编辑。</p>
+        <p class="panel-subtitle">共 {{ rows|length }} 条。`店铺/站点` 是业务映射键，确定后即可决定店铺、国家和域名。</p>
       </div>
       {% if can_edit %}
         <a class="btn-primary" href="/store-sites/new">新增店铺站点</a>

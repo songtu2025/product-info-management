@@ -8,6 +8,8 @@ from app.core.security import current_user, require_admin
 from app.core.templates import templates
 from app.modules.product_info.service import (
     DuplicateProductError,
+    LOCK_CONFLICT_MESSAGE,
+    LockConflictError,
     ProductFilters,
     DEFAULT_EXPORT_FIELDS,
     PRODUCT_LIST_COLUMNS,
@@ -230,6 +232,13 @@ async def product_create(request: Request):
             ),
             status_code=400,
         )
+    except LockConflictError:
+        return templates.TemplateResponse(
+            request,
+            "product_info/new.html",
+            build_product_new_context(payload, LOCK_CONFLICT_MESSAGE),
+            status_code=400,
+        )
 
     if product_id:
         return RedirectResponse(f"/products/{product_id}", status_code=303)
@@ -290,7 +299,23 @@ async def product_update(request: Request, product_id: int):
 
     form = await request.form()
     payload = build_update_payload(dict(form))
-    if update_product(product_id, payload, changed_by=user.username):
+    try:
+        updated = update_product(product_id, payload, changed_by=user.username)
+    except LockConflictError:
+        detail["product"].update(payload)
+        return templates.TemplateResponse(
+            request,
+            "product_info/edit.html",
+            {
+                "app_name": get_settings().app_name,
+                "active_nav": "产品信息",
+                "detail": detail,
+                "error": LOCK_CONFLICT_MESSAGE,
+            },
+            status_code=400,
+        )
+
+    if updated:
         return RedirectResponse(f"/products/{product_id}", status_code=303)
 
     detail["product"].update(payload)

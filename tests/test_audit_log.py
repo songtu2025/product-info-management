@@ -28,6 +28,8 @@ def test_update_product_writes_operation_log(monkeypatch):
                 """
                 CREATE TABLE amazon_product_info (
                     id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    sku TEXT,
                     product_name TEXT,
                     brand TEXT,
                     sales_status TEXT,
