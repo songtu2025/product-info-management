@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from io import BytesIO
 from math import ceil
+from time import monotonic
 
 from openpyxl import Workbook
 from sqlalchemy import text
@@ -19,6 +20,10 @@ class LockConflictError(Exception):
 
 LOCKED_MSKU_VALUE = "锁"
 LOCK_CONFLICT_MESSAGE = "同一店铺站点 + SKU 下最多只能有一个锁仓 MSKU 为“锁”。"
+FILTER_OPTIONS_CACHE_TTL_SECONDS = 300
+_filter_options_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.0, "value": None}
+PRODUCT_LIST_CACHE_TTL_SECONDS = 60
+_product_list_cache: dict[tuple[object, ...], dict[str, object]] = {}
 
 
 @dataclass(frozen=True)
@@ -32,10 +37,10 @@ class ProductFilters:
     listing_owner_status: str | None = None
     project_group: str | None = None
     page: int = 1
-    page_size: int = 50
+    page_size: int = 20
 
 
-PRODUCT_LIST_COLUMNS = (
+PRODUCT_ALL_COLUMNS = (
     {"key": "id", "label": "ID", "default_visible": False},
     {"key": "msku", "label": "MSKU", "default_visible": True},
     {"key": "asin", "label": "ASIN", "default_visible": True},
@@ -63,8 +68,25 @@ PRODUCT_LIST_COLUMNS = (
     {"key": "created_at", "label": "创建时间", "default_visible": False},
     {"key": "updated_at", "label": "更新时间", "default_visible": True},
 )
+PRODUCT_LIST_COLUMN_KEYS = {
+    "msku",
+    "asin",
+    "store_site",
+    "product_name",
+    "sku",
+    "brand",
+    "sales_status",
+    "listing",
+    "listing_owner",
+    "listing_owner_status",
+    "project_group",
+    "updated_at",
+}
+PRODUCT_LIST_COLUMNS = tuple(
+    column for column in PRODUCT_ALL_COLUMNS if column["key"] in PRODUCT_LIST_COLUMN_KEYS
+)
 
-PRODUCT_PAGE_SIZES = (50, 100, 200)
+PRODUCT_PAGE_SIZES = (20, 50, 100, 200)
 
 EXPORT_COLUMNS = (
     ("msku", "MSKU"),
@@ -84,7 +106,7 @@ EXPORT_COLUMNS = (
 )
 
 DEFAULT_EXPORT_FIELDS = tuple(field for field, _ in EXPORT_COLUMNS)
-EXPORT_COLUMN_MAP = {column["key"]: column["label"] for column in PRODUCT_LIST_COLUMNS}
+EXPORT_COLUMN_MAP = {column["key"]: column["label"] for column in PRODUCT_ALL_COLUMNS}
 PRODUCT_TABLE_ALIAS = "p"
 PRODUCT_OWNER_JOIN_SQL = """
 FROM amazon_product_info p
@@ -94,7 +116,7 @@ LEFT JOIN amazon_listing_owner_config lo
 """
 PRODUCT_COLUMN_EXPRESSIONS = {
     column["key"]: f"{PRODUCT_TABLE_ALIAS}.{column['key']} AS {column['key']}"
-    for column in PRODUCT_LIST_COLUMNS
+    for column in PRODUCT_ALL_COLUMNS
     if column["key"]
     not in {
         "listing_owner",
@@ -115,7 +137,8 @@ PRODUCT_COLUMN_EXPRESSIONS.update(
         "project_group": "lo.project_group AS project_group",
     }
 )
-LIST_COLUMNS = ",\n    ".join(PRODUCT_COLUMN_EXPRESSIONS[column["key"]] for column in PRODUCT_LIST_COLUMNS)
+LIST_FIELD_KEYS = ("id", *tuple(column["key"] for column in PRODUCT_LIST_COLUMNS))
+LIST_COLUMNS = ",\n    ".join(PRODUCT_COLUMN_EXPRESSIONS[key] for key in LIST_FIELD_KEYS)
 
 EDITABLE_FIELDS = (
     "product_name",
@@ -154,7 +177,7 @@ CREATE_FIELDS = (
 
 
 def normalize_filters(filters: ProductFilters) -> ProductFilters:
-    page_size = filters.page_size if filters.page_size in PRODUCT_PAGE_SIZES else 50
+    page_size = filters.page_size if filters.page_size in PRODUCT_PAGE_SIZES else 20
     return ProductFilters(
         q=_clean(filters.q),
         store_site=_clean(filters.store_site),
@@ -174,6 +197,11 @@ def list_products(filters: ProductFilters) -> dict[str, object]:
     engine = get_engine()
     if engine is None:
         return _empty_page(filters)
+    cache_key = _product_list_cache_key(engine, filters)
+    cached = _product_list_cache.get(cache_key)
+    now = monotonic()
+    if cached and now < cached["expires_at"]:
+        return cached["value"]
 
     where_sql, params = _build_where(filters)
     offset = (filters.page - 1) * filters.page_size
@@ -195,13 +223,18 @@ def list_products(filters: ProductFilters) -> dict[str, object]:
         rows = [dict(row) for row in conn.execute(list_sql, params).mappings()]
 
     pages = ceil(total / filters.page_size) if total else 0
-    return {
+    page = {
         "rows": rows,
         "total": total,
         "page": filters.page,
         "page_size": filters.page_size,
         "pages": pages,
     }
+    _product_list_cache[cache_key] = {
+        "expires_at": now + PRODUCT_LIST_CACHE_TTL_SECONDS,
+        "value": page,
+    }
+    return page
 
 
 def list_products_for_export(
@@ -272,6 +305,14 @@ def get_filter_options() -> dict[str, list[str]]:
             "listing_owner_statuses": [],
             "project_groups": [],
         }
+    now = monotonic()
+    engine_id = id(engine)
+    if (
+        _filter_options_cache["engine_id"] == engine_id
+        and _filter_options_cache["value"] is not None
+        and now < _filter_options_cache["expires_at"]
+    ):
+        return _filter_options_cache["value"]
 
     queries = {
         "store_sites": "SELECT DISTINCT store_site FROM amazon_product_info WHERE store_site IS NOT NULL AND store_site <> '' ORDER BY store_site LIMIT 200",
@@ -284,10 +325,26 @@ def get_filter_options() -> dict[str, list[str]]:
     }
 
     with engine.connect() as conn:
-        return {
+        options = {
             name: [row[0] for row in conn.execute(text(sql)).all()]
             for name, sql in queries.items()
         }
+    _filter_options_cache.update(
+        {
+            "engine_id": engine_id,
+            "expires_at": now + FILTER_OPTIONS_CACHE_TTL_SECONDS,
+            "value": options,
+        }
+    )
+    return options
+
+
+def clear_filter_options_cache() -> None:
+    _filter_options_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
+
+
+def clear_product_list_cache() -> None:
+    _product_list_cache.clear()
 
 
 def get_product_detail(product_id: int) -> dict[str, object] | None:
@@ -449,6 +506,8 @@ def create_product(
             changed_by=changed_by,
         )
 
+    clear_filter_options_cache()
+    clear_product_list_cache()
     return product_id
 
 
@@ -509,7 +568,111 @@ def update_product(
                 changed_by=changed_by,
             )
 
+    if result.rowcount > 0:
+        clear_filter_options_cache()
+        clear_product_list_cache()
     return result.rowcount > 0
+
+
+def bulk_update_product_lock_status(
+    product_ids: list[int],
+    lock_status: str | None,
+    changed_by: str = "system",
+) -> dict[str, int]:
+    clean_ids = list(dict.fromkeys(product_id for product_id in product_ids if product_id > 0))
+    if not clean_ids:
+        return {"updated": 0, "requested": 0}
+
+    desired_lock_status = LOCKED_MSKU_VALUE if is_locked_msku(lock_status) else None
+    engine = get_engine()
+    if engine is None:
+        return {"updated": 0, "requested": len(clean_ids)}
+
+    id_params = {f"id_{index}": product_id for index, product_id in enumerate(clean_ids)}
+    id_placeholders = ", ".join(f":{key}" for key in id_params)
+    select_sql = text(
+        f"""
+        SELECT id, store_site, sku, msku_lock_status
+        FROM amazon_product_info
+        WHERE id IN ({id_placeholders})
+        """
+    )
+    update_sql = text(
+        """
+        UPDATE amazon_product_info
+        SET msku_lock_status = :msku_lock_status
+        WHERE id = :product_id
+        """
+    )
+
+    updated = 0
+    with engine.begin() as conn:
+        rows = [dict(row) for row in conn.execute(select_sql, id_params).mappings()]
+        if desired_lock_status == LOCKED_MSKU_VALUE:
+            _ensure_bulk_lock_has_no_conflict(conn, rows)
+
+        for row in rows:
+            changes = build_change_set(row, {"msku_lock_status": desired_lock_status})
+            if not changes:
+                continue
+            result = conn.execute(
+                update_sql,
+                {
+                    "product_id": row["id"],
+                    "msku_lock_status": desired_lock_status,
+                },
+            )
+            if result.rowcount > 0:
+                updated += 1
+                record_operation_log(
+                    conn,
+                    table_name="amazon_product_info",
+                    record_id=row["id"],
+                    operation_type="BULK_UPDATE",
+                    change_data=changes,
+                    changed_by=changed_by,
+                )
+
+    if updated:
+        clear_filter_options_cache()
+        clear_product_list_cache()
+    return {"updated": updated, "requested": len(clean_ids)}
+
+
+def _ensure_bulk_lock_has_no_conflict(conn, rows: list[dict[str, object]]) -> None:
+    seen_keys: set[tuple[object, object]] = set()
+    for row in rows:
+        key = (row.get("store_site"), row.get("sku"))
+        if not key[0] or not key[1]:
+            continue
+        if key in seen_keys:
+            raise LockConflictError
+        seen_keys.add(key)
+
+    for row in rows:
+        if _has_locked_msku_conflict(
+            conn,
+            store_site=row.get("store_site"),
+            sku=row.get("sku"),
+            exclude_product_id=int(row["id"]),
+        ):
+            raise LockConflictError
+
+
+def _product_list_cache_key(engine, filters: ProductFilters) -> tuple[object, ...]:
+    return (
+        id(engine),
+        filters.q,
+        filters.store_site,
+        filters.brand,
+        filters.sales_status,
+        filters.listing,
+        filters.listing_owner,
+        filters.listing_owner_status,
+        filters.project_group,
+        filters.page,
+        filters.page_size,
+    )
 
 
 def _build_where(filters: ProductFilters) -> tuple[str, dict[str, object]]:

@@ -7,7 +7,12 @@ from openpyxl import Workbook, load_workbook
 from sqlalchemy import bindparam, text
 
 from app.core.db import get_engine
-from app.modules.product_info.service import LOCK_CONFLICT_MESSAGE, is_locked_msku
+from app.modules.product_info.service import (
+    LOCK_CONFLICT_MESSAGE,
+    clear_filter_options_cache as clear_product_filter_options_cache,
+    clear_product_list_cache,
+    is_locked_msku,
+)
 from app.shared.audit import build_change_set, record_operation_log
 
 
@@ -104,6 +109,7 @@ IMPORT_UPLOAD_DIR = Path("data/imports")
 def preview_product_import(content: bytes) -> dict[str, Any]:
     rows, blocked_fields = _read_rows(content)
     existing_keys = _load_existing_keys(rows)
+    existing_products = _load_existing_products(rows)
 
     valid_rows = []
     missing_product_rows = []
@@ -136,12 +142,18 @@ def preview_product_import(content: bytes) -> dict[str, Any]:
             for field, value in row["data"].items()
             if field in IMPORT_UPDATE_FIELDS and value is not None
         }
+        before = existing_products.get((store_site, msku), {})
+        change_set = build_change_set(before, changes)
         valid_rows.append(
             {
                 "row_number": row["row_number"],
                 "store_site": store_site,
                 "msku": msku,
                 "changes": changes,
+                "change_items": [
+                    {"field": field, "old": values["old"], "new": values["new"]}
+                    for field, values in change_set.items()
+                ],
             }
         )
 
@@ -178,6 +190,38 @@ def build_product_import_template() -> bytes:
     sheet.title = "产品信息导入模板"
     sheet.append(list(IMPORT_TEMPLATE_HEADERS))
     sheet.append(["SAYOLA:US", "MSKU-001"] + [""] * (len(IMPORT_TEMPLATE_HEADERS) - 2))
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def build_product_import_issue_workbook(preview: dict[str, Any]) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "导入问题"
+    sheet.append(["类型", "行号", "店铺站点", "MSKU", "错误说明"])
+
+    for row in preview.get("missing_product_rows", []):
+        sheet.append(
+            [
+                "未匹配产品",
+                row.get("row_number"),
+                row.get("store_site"),
+                row.get("msku"),
+                "产品不存在",
+            ]
+        )
+    for row in preview.get("error_rows", []):
+        sheet.append(
+            [
+                "错误行",
+                row.get("row_number"),
+                row.get("store_site"),
+                row.get("msku"),
+                row.get("message"),
+            ]
+        )
 
     output = BytesIO()
     workbook.save(output)
@@ -277,6 +321,9 @@ def commit_product_import(content: bytes, changed_by: str = "system") -> dict[st
                 )
             else:
                 skipped_count += 1
+    if updated_count > 0:
+        clear_product_list_cache()
+        clear_product_filter_options_cache()
 
     return {
         "success": True,
@@ -353,6 +400,51 @@ def _load_existing_keys(rows: list[dict[str, Any]]) -> set[tuple[str, str]]:
         }
 
     return matched & keys
+
+
+def _load_existing_products(rows: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
+    keys = {
+        (row["data"].get("store_site"), row["data"].get("msku"))
+        for row in rows
+        if row["data"].get("store_site") and row["data"].get("msku")
+    }
+    fields = sorted(
+        {
+            field
+            for row in rows
+            for field in row["data"]
+            if field in IMPORT_UPDATE_FIELDS
+        }
+    )
+    if not keys or not fields:
+        return {}
+
+    engine = get_engine()
+    if engine is None:
+        return {}
+
+    store_sites = sorted({store_site for store_site, _ in keys})
+    mskus = sorted({msku for _, msku in keys})
+    select_fields = ["store_site", "msku", *fields]
+    query = text(
+        f"""
+        SELECT {", ".join(select_fields)}
+        FROM amazon_product_info
+        WHERE store_site IN :store_sites AND msku IN :mskus
+        """
+    ).bindparams(
+        bindparam("store_sites", expanding=True),
+        bindparam("mskus", expanding=True),
+    )
+
+    with engine.connect() as conn:
+        return {
+            (row["store_site"], row["msku"]): dict(row)
+            for row in conn.execute(
+                query,
+                {"store_sites": store_sites, "mskus": mskus},
+            ).mappings()
+        }
 
 
 def _find_lock_conflict_row_numbers(rows: list[dict[str, Any]]) -> set[int]:

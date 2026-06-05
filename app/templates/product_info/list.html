@@ -1,7 +1,27 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% block content %}
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
+
+  <section class="mb-4">
+    <div class="mb-2">
+      <h2 class="text-base font-bold text-slate-950">运营概览</h2>
+    </div>
+    <div class="grid gap-3 md:grid-cols-3">
+      <div class="metric-panel">
+        <div class="metric-label">产品总数</div>
+        <div class="metric-value">{{ dashboard.product_total }}</div>
+      </div>
+      <div class="metric-panel">
+        <div class="metric-label">数据质量问题</div>
+        <div class="metric-value">{{ dashboard.quality_issue_total }}</div>
+      </div>
+      <div class="metric-panel">
+        <div class="metric-label">当前筛选</div>
+        <div class="metric-value">{{ dashboard.filtered_total }}</div>
+      </div>
+    </div>
+  </section>
 
   <form class="filter-panel mb-4" method="get">
     <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
@@ -102,6 +122,29 @@
     </div>
   </form>
 
+  <section class="filter-panel mb-4" data-filter-view-panel>
+    <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h2 class="text-base font-bold text-slate-950">常用筛选</h2>
+        <p class="mt-1 text-sm text-slate-500">把当前筛选条件保存成视图，后续一键套用。</p>
+      </div>
+      <div class="flex flex-col gap-2 md:flex-row">
+        <input class="field-input h-9 md:w-48" data-filter-view-name placeholder="视图名称">
+        <button class="btn-secondary" data-filter-view-save type="button">保存当前筛选</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2" data-filter-view-list>
+      {% for view in saved_filter_views %}
+        <span class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+          <a class="action-link" href="{{ view.url }}">{{ view.name }}</a>
+          <button class="text-xs font-semibold text-slate-500 hover:text-red-700" data-filter-view-delete="{{ view.name }}" type="button">删除</button>
+        </span>
+      {% else %}
+        <span class="text-sm text-slate-500" data-filter-view-empty>暂无常用筛选</span>
+      {% endfor %}
+    </div>
+  </section>
+
   <div class="content-panel">
     <div class="panel-heading flex-col items-start md:flex-row md:items-center">
       <div>
@@ -121,6 +164,40 @@
             aria-controls="product-export-fields"
           >导出字段</button>
           {% if can_edit %}
+            <button
+              class="btn-secondary"
+              form="product-bulk-form"
+              formaction="/products/bulk-lock"
+              name="lock_status"
+              type="submit"
+              value="锁"
+            >批量锁仓</button>
+            <button
+              class="btn-secondary"
+              form="product-bulk-form"
+              formaction="/products/bulk-lock"
+              name="lock_status"
+              type="submit"
+              value=""
+            >批量解锁</button>
+            <input
+              class="field-input h-9 w-32"
+              form="product-bulk-form"
+              list="product-listing-owner-options"
+              name="owner"
+              placeholder="负责人"
+            >
+            <datalist id="product-listing-owner-options">
+              {% for value in options.listing_owners %}
+                <option value="{{ value }}"></option>
+              {% endfor %}
+            </datalist>
+            <button
+              class="btn-secondary"
+              form="product-bulk-form"
+              formaction="/products/bulk-listing-owner"
+              type="submit"
+            >批量负责人</button>
             <a class="btn-primary" href="{{ create_url }}">新增产品</a>
           {% endif %}
           <button
@@ -148,7 +225,7 @@
         <button class="btn-secondary" data-export-fields-reset type="button">恢复默认</button>
       </div>
       <div class="field-settings-list">
-        {% for column in product_list_columns %}
+        {% for column in product_export_columns %}
           <label class="field-settings-item">
             <input
               class="h-4 w-4"
@@ -204,65 +281,104 @@
     </div>
 
     <div class="table-wrap">
-      <table class="data-table table-fixed text-sm" data-product-list-table>
-        <colgroup>
-          {% for column in product_list_columns %}
-            <col data-column="{{ column.key }}">
-          {% endfor %}
-          <col data-column="actions">
-        </colgroup>
-        <thead class="text-left">
-          <tr>
+      <form id="product-bulk-form" method="post" action="/products/bulk-lock">
+        <input
+          name="return_url"
+          type="hidden"
+          value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}"
+        >
+        <table class="data-table table-fixed text-sm" data-product-list-table>
+          <colgroup>
+            {% if can_edit %}
+              <col data-column="bulk-select">
+            {% endif %}
             {% for column in product_list_columns %}
-              <th class="table-head relative" data-column="{{ column.key }}" data-default-visible="{{ 'true' if column.default_visible else 'false' }}">
-                <div class="flex items-center justify-between gap-2">
-                  <span>{{ column.label }}</span>
-                  <span
-                    class="resize-handle"
-                    data-resize-column="{{ column.key }}"
-                    title="拖动调整列宽"
-                  ></span>
-                </div>
-              </th>
+              <col data-column="{{ column.key }}">
             {% endfor %}
-            <th class="table-head" data-column="actions">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in products.rows %}
-            <tr class="table-row">
-              {% for column in product_list_columns %}
-                <td
-                  class="table-cell truncate {% if column.key in ['id', 'asin', 'msku', 'sku', 'fnsku'] %}mono{% endif %} {% if column.key == 'msku' %}font-medium text-slate-950{% endif %}"
-                  data-column="{{ column.key }}"
-                  data-default-visible="{{ 'true' if column.default_visible else 'false' }}"
-                  title="{{ row.get(column.key) or '' }}"
-                >
-                  {% if column.key in ["sales_status", "msku_lock_status"] and row.get(column.key) %}
-                    <span class="status-badge">{{ row.get(column.key) }}</span>
-                  {% else %}
-                    {{ row.get(column.key) or "-" }}
-                  {% endif %}
-                </td>
-              {% endfor %}
-              <td class="table-cell" data-column="actions">
-                <div class="row-actions">
-                  <a class="action-link" href="/products/{{ row.id }}">详情</a>
-                  <a class="action-link" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ row.id }}">日志</a>
-                  {% if can_edit %}
-                    <a class="action-link" href="/products/{{ row.id }}/edit">编辑</a>
-                  {% endif %}
-                </div>
-              </td>
-            </tr>
-          {% else %}
+            <col data-column="actions">
+          </colgroup>
+          <thead class="text-left">
             <tr>
-              <td class="px-4 py-8 text-center text-slate-500" colspan="{{ product_list_columns|length + 1 }}">没有匹配的产品数据</td>
+              {% if can_edit %}
+                <th class="table-head w-12" data-column="bulk-select">
+                  <input class="h-4 w-4" data-bulk-select-all type="checkbox" aria-label="选择当前页产品">
+                </th>
+              {% endif %}
+              {% for column in product_list_columns %}
+                <th class="table-head relative" data-column="{{ column.key }}" data-default-visible="{{ 'true' if column.default_visible else 'false' }}">
+                  <div class="flex items-center justify-between gap-2">
+                    <span>{{ column.label }}</span>
+                    <span
+                      class="resize-handle"
+                      data-resize-column="{{ column.key }}"
+                      title="拖动调整列宽"
+                    ></span>
+                  </div>
+                </th>
+              {% endfor %}
+              <th class="table-head" data-column="actions">操作</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for row in products.rows %}
+              <tr class="table-row">
+                {% if can_edit %}
+                  <td class="table-cell" data-column="bulk-select">
+                    <input
+                      class="h-4 w-4"
+                      data-bulk-product-id="{{ row.id }}"
+                      name="product_ids"
+                      type="checkbox"
+                      value="{{ row.id }}"
+                      aria-label="选择 {{ row.msku or row.id }}"
+                    >
+                  </td>
+                {% endif %}
+                {% for column in product_list_columns %}
+                  <td
+                    class="table-cell truncate {% if column.key in ['id', 'asin', 'msku', 'sku', 'fnsku'] %}mono{% endif %} {% if column.key == 'msku' %}font-medium text-slate-950{% endif %}"
+                    data-column="{{ column.key }}"
+                    data-default-visible="{{ 'true' if column.default_visible else 'false' }}"
+                    title="{{ row.get(column.key) or '' }}"
+                  >
+                    {% if column.key in ["sales_status", "msku_lock_status"] and row.get(column.key) %}
+                      <span class="status-badge">{{ row.get(column.key) }}</span>
+                    {% else %}
+                      {{ row.get(column.key) or "-" }}
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="table-cell" data-column="actions">
+                  <div class="row-actions">
+                    <a class="action-link" href="/products/{{ row.id }}">详情</a>
+                    <a class="action-link" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ row.id }}">日志</a>
+                    {% if can_edit %}
+                      <a class="action-link" href="/products/{{ row.id }}/edit">编辑</a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td class="px-4 py-8 text-center text-slate-500" colspan="{{ product_list_columns|length + 1 + (1 if can_edit else 0) }}">没有匹配的产品数据</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </form>
     </div>
+
+    <script>
+      (() => {
+        const selectAll = document.querySelector("[data-bulk-select-all]");
+        const checkboxes = Array.from(document.querySelectorAll("[data-bulk-product-id]"));
+        selectAll?.addEventListener("change", () => {
+          checkboxes.forEach((checkbox) => {
+            checkbox.checked = selectAll.checked;
+          });
+        });
+      })();
+    </script>
 
     <div class="pagination-bar">
       <div class="pagination-actions">
@@ -317,6 +433,7 @@
     (() => {
       const storageKey = "productListColumnState";
       const serverColumnState = {{ column_state|tojson }};
+      const filterViewState = {{ saved_filter_views|tojson }};
       const defaultExportFields = {{ default_export_fields|tojson }};
       const savedExportFields = {{ saved_export_fields|tojson }};
       const table = document.querySelector("table");
@@ -330,6 +447,9 @@
       const resetButton = document.querySelector("[data-column-reset]");
       const allKeys = Array.from(document.querySelectorAll("[data-column-toggle]")).map((toggle) => toggle.dataset.columnToggle);
       const resizers = Array.from(document.querySelectorAll("[data-resize-column]"));
+      const filterForm = document.querySelector("form.filter-panel");
+      const filterViewNameInput = document.querySelector("[data-filter-view-name]");
+      const filterViewSave = document.querySelector("[data-filter-view-save]");
       const widthWeights = {
         id: 0.5,
         product_name: 1.8,
@@ -386,6 +506,67 @@
       exportDownload?.addEventListener("click", (event) => {
         event.preventDefault();
         window.location.href = buildExportUrl();
+      });
+
+      const filterKeys = [
+        "q",
+        "store_site",
+        "brand",
+        "sales_status",
+        "listing",
+        "listing_owner",
+        "listing_owner_status",
+        "project_group",
+        "page_size",
+      ];
+
+      const currentFilters = () => {
+        const formData = new FormData(filterForm);
+        const filters = {};
+        filterKeys.forEach((key) => {
+          const value = String(formData.get(key) || "").trim();
+          if (value) {
+            filters[key] = key === "page_size" ? Number(value) : value;
+          }
+        });
+        return filters;
+      };
+
+      const saveFilterViews = (views) => {
+        return fetch("/products/preferences/filter-views", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({views}),
+        });
+      };
+
+      filterViewSave?.addEventListener("click", () => {
+        const name = String(filterViewNameInput?.value || "").trim();
+        const filters = currentFilters();
+        if (!name || !Object.keys(filters).length) {
+          return;
+        }
+        const views = [
+          ...filterViewState.filter((view) => view.name !== name),
+          {name, filters},
+        ];
+        saveFilterViews(views).then((response) => {
+          if (response.ok) {
+            window.location.reload();
+          }
+        });
+      });
+
+      document.querySelectorAll("[data-filter-view-delete]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const name = button.dataset.filterViewDelete;
+          const views = filterViewState.filter((view) => view.name !== name);
+          saveFilterViews(views).then((response) => {
+            if (response.ok) {
+              window.location.reload();
+            }
+          });
+        });
       });
 
       const readState = () => {

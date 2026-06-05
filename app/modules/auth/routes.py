@@ -2,8 +2,9 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.core.config import get_settings
-from app.core.security import authenticate_user
+from app.core.security import authenticate_user, change_user_password, current_user
 from app.core.templates import templates
+from app.shared.flash import set_flash
 
 
 router = APIRouter()
@@ -50,3 +51,50 @@ def login_submit(
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
+
+
+@router.get("/account/password", response_class=HTMLResponse)
+def password_page(request: Request):
+    user = current_user(request)
+    return templates.TemplateResponse(
+        request,
+        "auth/password.html",
+        {
+            "app_name": get_settings().app_name,
+            "active_nav": "账号设置",
+            "username": user.username if user else "",
+            "error": None,
+        },
+    )
+
+
+@router.post("/account/password", response_class=HTMLResponse)
+def password_update(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+):
+    user = current_user(request)
+    username = user.username if user else ""
+    error = None
+    if new_password != confirm_password:
+        error = "两次输入的新密码不一致。"
+    elif not change_user_password(username, current_password, new_password):
+        error = "原密码不正确，或新密码为空。"
+
+    if error:
+        return templates.TemplateResponse(
+            request,
+            "auth/password.html",
+            {
+                "app_name": get_settings().app_name,
+                "active_nav": "账号设置",
+                "username": username,
+                "error": error,
+            },
+            status_code=400,
+        )
+
+    set_flash(request, "密码已修改。")
+    return RedirectResponse("/account/password", status_code=303)

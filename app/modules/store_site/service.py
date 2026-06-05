@@ -1,3 +1,5 @@
+from time import monotonic
+
 from sqlalchemy import text
 
 from app.core.db import get_engine
@@ -6,6 +8,8 @@ from app.shared.audit import build_change_set, record_operation_log
 
 EDITABLE_FIELDS = ("store", "country", "domain")
 CREATE_FIELDS = ("store_site", "store", "country", "domain")
+STORE_SITE_LIST_CACHE_TTL_SECONDS = 300
+_store_site_list_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.0, "value": None}
 
 
 class DuplicateStoreSiteError(Exception):
@@ -18,6 +22,16 @@ def list_store_sites(q: str | None = None) -> list[dict[str, object]]:
         return []
 
     q = _clean(q)
+    now = monotonic()
+    engine_id = id(engine)
+    if (
+        q is None
+        and _store_site_list_cache["engine_id"] == engine_id
+        and _store_site_list_cache["value"] is not None
+        and now < _store_site_list_cache["expires_at"]
+    ):
+        return _store_site_list_cache["value"]
+
     params: dict[str, object] = {}
     where_sql = ""
     if q:
@@ -38,7 +52,20 @@ def list_store_sites(q: str | None = None) -> list[dict[str, object]]:
         """
     )
     with engine.connect() as conn:
-        return [dict(row) for row in conn.execute(sql, params).mappings()]
+        rows = [dict(row) for row in conn.execute(sql, params).mappings()]
+    if q is None:
+        _store_site_list_cache.update(
+            {
+                "engine_id": engine_id,
+                "expires_at": now + STORE_SITE_LIST_CACHE_TTL_SECONDS,
+                "value": rows,
+            }
+        )
+    return rows
+
+
+def clear_store_site_list_cache() -> None:
+    _store_site_list_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
 
 
 def get_store_site(store_site_id: int) -> dict[str, object] | None:
@@ -131,6 +158,7 @@ def create_store_site(
             changed_by=changed_by,
         )
 
+    clear_store_site_list_cache()
     return store_site_id
 
 
@@ -183,6 +211,8 @@ def update_store_site(
                 changed_by=changed_by,
             )
 
+    if result.rowcount > 0:
+        clear_store_site_list_cache()
     return result.rowcount > 0
 
 

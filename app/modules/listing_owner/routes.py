@@ -131,12 +131,12 @@ def _ensure_page(value: object, filters: ListingOwnerFilters) -> dict[str, objec
 
 
 @router.get("/new", response_class=HTMLResponse)
-def listing_owner_new(request: Request):
+def listing_owner_new(request: Request, store_site: str | None = None, listing: str | None = None):
     require_admin(request)
     return templates.TemplateResponse(
         request,
         "listing_owner/new.html",
-        build_listing_owner_new_context(),
+        build_listing_owner_new_context({"store_site": store_site, "listing": listing}),
     )
 
 

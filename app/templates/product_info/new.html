@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% macro value(row, key) -%}
   {{ row.get(key) if row.get(key) not in [None, ""] else "" }}

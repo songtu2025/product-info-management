@@ -6,16 +6,21 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from app.core.config import get_settings
 from app.core.security import current_user, require_admin
 from app.core.templates import templates
+from app.modules.data_quality.service import get_product_quality_report
+from app.modules.listing_owner.service import bulk_assign_listing_owner_from_products
 from app.modules.product_info.service import (
     DuplicateProductError,
     LOCK_CONFLICT_MESSAGE,
     LockConflictError,
+    PRODUCT_ALL_COLUMNS,
     ProductFilters,
     DEFAULT_EXPORT_FIELDS,
     PRODUCT_LIST_COLUMNS,
     PRODUCT_PAGE_SIZES,
     build_create_payload,
     build_update_payload,
+    bulk_update_product_lock_status,
+    clear_product_list_cache,
     create_product,
     export_products_to_xlsx,
     get_filter_options,
@@ -25,13 +30,25 @@ from app.modules.product_info.service import (
 )
 from app.modules.store_site.service import list_store_sites
 from app.shared.flash import set_flash
-from app.shared.user_preference import get_user_preference, save_user_preference
+from app.shared.user_preference import get_user_preferences, save_user_preference
 
 
 router = APIRouter()
 COLUMN_PREFERENCE_KEY = "product_info.list.columns"
 EXPORT_FIELD_PREFERENCE_KEY = "product_info.export.fields"
-EXPORT_FIELD_KEYS = {column["key"] for column in PRODUCT_LIST_COLUMNS}
+FILTER_VIEW_PREFERENCE_KEY = "product_info.filter.views"
+EXPORT_FIELD_KEYS = {column["key"] for column in PRODUCT_ALL_COLUMNS}
+FILTER_VIEW_FIELDS = (
+    "q",
+    "store_site",
+    "brand",
+    "sales_status",
+    "listing",
+    "listing_owner",
+    "listing_owner_status",
+    "project_group",
+    "page_size",
+)
 
 
 def build_product_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
@@ -56,7 +73,7 @@ def product_list(
     listing_owner_status: str | None = None,
     project_group: str | None = None,
     page: int = 1,
-    page_size: int = 50,
+    page_size: int = 20,
 ):
     filters = ProductFilters(
         q=q,
@@ -72,6 +89,8 @@ def product_list(
     )
     products = list_products(filters)
     options = get_filter_options()
+    quality_report = get_product_quality_report()
+    quality_issue_total = sum(int(issue.get("count") or 0) for issue in quality_report.get("issues", []))
     normalized_filters = ProductFilters(
         q=filters.q,
         store_site=filters.store_site,
@@ -85,7 +104,16 @@ def product_list(
         page_size=int(products["page_size"]),
     )
     username = _preference_username(request)
-    export_field_state = get_user_preference(username, EXPORT_FIELD_PREFERENCE_KEY) if username else {}
+    preferences = (
+        get_user_preferences(
+            username,
+            [EXPORT_FIELD_PREFERENCE_KEY, COLUMN_PREFERENCE_KEY, FILTER_VIEW_PREFERENCE_KEY],
+        )
+        if username
+        else {}
+    )
+    export_field_state = preferences.get(EXPORT_FIELD_PREFERENCE_KEY, {})
+    saved_filter_views = _saved_filter_views(preferences.get(FILTER_VIEW_PREFERENCE_KEY, {}))
 
     return templates.TemplateResponse(
         request,
@@ -95,11 +123,18 @@ def product_list(
             "active_nav": "产品信息",
             "filters": filters,
             "products": products,
+            "dashboard": {
+                "product_total": quality_report.get("total", products["total"]),
+                "filtered_total": products["total"],
+                "quality_issue_total": quality_issue_total,
+            },
             "product_list_columns": PRODUCT_LIST_COLUMNS,
+            "product_export_columns": PRODUCT_ALL_COLUMNS,
             "default_export_fields": DEFAULT_EXPORT_FIELDS,
             "saved_export_fields": _saved_export_fields(export_field_state),
             "product_page_sizes": PRODUCT_PAGE_SIZES,
-            "column_state": get_user_preference(username, COLUMN_PREFERENCE_KEY) if username else {},
+            "column_state": preferences.get(COLUMN_PREFERENCE_KEY, {}),
+            "saved_filter_views": saved_filter_views,
             "pagination": _build_pagination(normalized_filters, int(products["pages"])),
             "options": options,
             "export_url": "/products/export"
@@ -139,6 +174,22 @@ async def product_export_field_preference_save(request: Request):
 
     safe_fields = [field for field in fields if isinstance(field, str) and field in EXPORT_FIELD_KEYS]
     if not save_user_preference(username, EXPORT_FIELD_PREFERENCE_KEY, {"fields": safe_fields}):
+        raise HTTPException(status_code=500, detail="Save failed")
+    return {"ok": True}
+
+
+@router.post("/products/preferences/filter-views")
+async def product_filter_view_preference_save(request: Request):
+    username = _preference_username(request)
+    if not username:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    state = await request.json()
+    if not isinstance(state, dict):
+        raise HTTPException(status_code=400, detail="Invalid preference")
+
+    safe_state = {"views": _sanitize_filter_views(state.get("views"))}
+    if not save_user_preference(username, FILTER_VIEW_PREFERENCE_KEY, safe_state):
         raise HTTPException(status_code=500, detail="Save failed")
     return {"ok": True}
 
@@ -192,6 +243,68 @@ def _saved_export_fields(state: dict[str, object] | None) -> list[str]:
     return fields or list(DEFAULT_EXPORT_FIELDS)
 
 
+def _saved_filter_views(state: dict[str, object] | None) -> list[dict[str, object]]:
+    views = _sanitize_filter_views(state.get("views") if state else None)
+    return [
+        {
+            "name": view["name"],
+            "filters": view["filters"],
+            "url": _filter_view_url(view["filters"]),
+        }
+        for view in views
+    ]
+
+
+def _sanitize_filter_views(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+
+    views = []
+    seen_names = set()
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()[:40]
+        filters = _sanitize_filter_values(item.get("filters"))
+        if not name or not filters:
+            continue
+        if name in seen_names:
+            views = [view for view in views if view["name"] != name]
+        seen_names.add(name)
+        views.append({"name": name, "filters": filters})
+        if len(views) >= 20:
+            break
+    return views
+
+
+def _sanitize_filter_values(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+
+    filters: dict[str, object] = {}
+    for key in FILTER_VIEW_FIELDS:
+        raw = value.get(key)
+        if raw in (None, ""):
+            continue
+        if key == "page_size":
+            try:
+                page_size = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if page_size in PRODUCT_PAGE_SIZES:
+                filters[key] = page_size
+            continue
+        text_value = str(raw).strip()
+        if text_value:
+            filters[key] = text_value
+    return filters
+
+
+def _filter_view_url(filters: dict[str, object]) -> str:
+    query = urlencode({key: filters[key] for key in FILTER_VIEW_FIELDS if key in filters})
+    return f"/?{query}" if query else "/"
+
+
 def _build_pagination(filters: ProductFilters, pages: int) -> dict[str, object]:
     current_page = max(filters.page, 1)
     last_page = max(pages, 1)
@@ -222,6 +335,73 @@ def _build_list_url(filters: ProductFilters, page: int) -> str:
     }
     query = urlencode({key: value for key, value in params.items() if value not in (None, "")})
     return f"?{query}" if query else "?"
+
+
+@router.post("/products/bulk-lock")
+async def product_bulk_lock(request: Request):
+    user = require_admin(request)
+    form = await request.form()
+    product_ids = _parse_product_ids(form.getlist("product_ids"))
+    lock_status = form.get("lock_status")
+    return_url = str(form.get("return_url") or "/")
+
+    if not product_ids:
+        set_flash(request, "请先选择要操作的产品。")
+        return RedirectResponse(return_url, status_code=303)
+
+    try:
+        result = bulk_update_product_lock_status(
+            product_ids,
+            str(lock_status) if lock_status else None,
+            changed_by=user.username,
+        )
+    except LockConflictError:
+        set_flash(request, LOCK_CONFLICT_MESSAGE)
+        return RedirectResponse(return_url, status_code=303)
+
+    action = "锁仓" if lock_status == "锁" else "解锁"
+    set_flash(request, f"已{action} {result['updated']} 条产品。")
+    return RedirectResponse(return_url, status_code=303)
+
+
+@router.post("/products/bulk-listing-owner")
+async def product_bulk_listing_owner(request: Request):
+    user = require_admin(request)
+    form = await request.form()
+    product_ids = _parse_product_ids(form.getlist("product_ids"))
+    owner = str(form.get("owner") or "").strip()
+    return_url = str(form.get("return_url") or "/")
+
+    if not product_ids:
+        set_flash(request, "请先选择要操作的产品。")
+        return RedirectResponse(return_url, status_code=303)
+    if not owner:
+        set_flash(request, "请填写 Listing 负责人。")
+        return RedirectResponse(return_url, status_code=303)
+
+    result = bulk_assign_listing_owner_from_products(
+        product_ids,
+        owner,
+        changed_by=user.username,
+    )
+    clear_product_list_cache()
+    set_flash(
+        request,
+        f"已设置负责人：新增 {result['created']} 条，更新 {result['updated']} 条，跳过 {result['skipped']} 条。",
+    )
+    return RedirectResponse(return_url, status_code=303)
+
+
+def _parse_product_ids(values: list[object]) -> list[int]:
+    product_ids: list[int] = []
+    for value in values:
+        try:
+            product_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if product_id > 0:
+            product_ids.append(product_id)
+    return product_ids
 
 
 @router.get("/products/new", response_class=HTMLResponse)

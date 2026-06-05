@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% block content %}
   {% set has_preview = preview is not none %}
@@ -45,12 +45,15 @@
 
     {% if preview %}
       <section class="import-preview-panel">
-      <div class="import-preview-heading">
-        <div>
-          <h3 class="import-section-title">校验结果</h3>
-          <p class="import-section-copy">确认可更新、未匹配和错误行后，再决定是否写入数据库。</p>
+        <div class="import-preview-heading">
+          <div>
+            <h3 class="import-section-title">校验结果</h3>
+            <p class="import-section-copy">确认可更新、未匹配和错误行后，再决定是否写入数据库。</p>
+          </div>
+          {% if import_token and (preview.missing_product_count > 0 or preview.error_count > 0) %}
+            <a class="btn-secondary inline-flex items-center" href="/products/import/issues?import_token={{ import_token }}">下载错误明细</a>
+          {% endif %}
         </div>
-      </div>
 
       <div class="grid gap-3 px-4 pb-4 md:grid-cols-4">
         <div class="import-stat-card">
@@ -106,8 +109,12 @@
                   <td class="table-cell">{{ row.store_site }}</td>
                   <td class="table-cell mono">{{ row.msku }}</td>
                   <td class="table-cell">
-                    {% for field, value in row.changes.items() %}
-                      <span class="mr-2 inline-block">{{ field }}={{ value }}</span>
+                    {% for item in row.change_items %}
+                      <span class="mr-2 inline-block">{{ item.field }}：{{ item.old or "-" }} -> {{ item.new or "-" }}</span>
+                    {% else %}
+                      {% for field, value in row.changes.items() %}
+                        <span class="mr-2 inline-block">{{ field }}={{ value }}</span>
+                      {% endfor %}
                     {% endfor %}
                   </td>
                 </tr>

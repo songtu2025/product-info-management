@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% macro value(text) -%}
   {{ text if text not in [None, ""] else "-" }}
@@ -8,6 +8,7 @@
   {% set product = detail.product %}
   {% set store = detail.store_site %}
   {% set owner = detail.owner %}
+  {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
 
   <section class="content-panel detail-hero mb-4">
     <div class="detail-hero-grid">
@@ -28,7 +29,7 @@
       </div>
       <div class="detail-actions">
         <a class="btn-secondary" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ product.id }}">查看操作日志</a>
-      {% if request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
+      {% if can_edit %}
           <a class="btn-primary" href="/products/{{ product.id }}/edit">编辑产品</a>
       {% endif %}
       </div>
@@ -134,6 +135,9 @@
           {% endif %}
           {% if product.listing %}
             <a class="relation-link" href="/listing-owners?q={{ product.listing|urlencode }}">按 Listing 查看负责人 <span>进入</span></a>
+          {% endif %}
+          {% if can_edit and not owner and product.store_site and product.listing %}
+            <a class="relation-link" href="/listing-owners/new?store_site={{ product.store_site|urlencode }}&amp;listing={{ product.listing|urlencode }}">创建负责人配置 <span>进入</span></a>
           {% endif %}
         </div>
       </section>

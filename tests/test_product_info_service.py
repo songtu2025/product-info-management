@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 
 import pytest
@@ -43,7 +44,7 @@ def test_normalize_filters_trims_values_and_forces_page_size():
     assert filters.listing_owner_status == "Active"
     assert filters.project_group == "GroupA"
     assert filters.page == 1
-    assert filters.page_size == 50
+    assert filters.page_size == 20
 
 
 def test_build_where_supports_search_and_exact_filters():
@@ -82,7 +83,7 @@ def test_build_where_supports_search_and_exact_filters():
     }
 
 
-def test_list_products_returns_all_product_table_fields(monkeypatch):
+def test_list_products_returns_lightweight_table_fields(monkeypatch):
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
         conn.execute(
@@ -166,16 +167,208 @@ def test_list_products_returns_all_product_table_fields(monkeypatch):
 
     rows = list_products(ProductFilters())["rows"]
 
-    assert rows[0]["parent_asin"] == "PARENT001"
-    assert rows[0]["fnsku"] == "FNSKU-001"
-    assert rows[0]["label_name"] == "标签"
-    assert rows[0]["msku_shipping_remark"] == "发货备注"
-    assert rows[0]["created_at"] == "2026-06-01"
+    assert "parent_asin" not in rows[0]
+    assert "fnsku" not in rows[0]
+    assert "label_name" not in rows[0]
+    assert "msku_shipping_remark" not in rows[0]
+    assert "created_at" not in rows[0]
+    assert rows[0]["msku"] == "MSKU-001"
+    assert rows[0]["product_name"] == "Product A"
     assert rows[0]["listing_owner"] == "OwnerA"
     assert rows[0]["listing_owner_status"] == "Active"
-    assert rows[0]["listing_maintainer"] == "MaintainerA"
-    assert rows[0]["include_inventory_age_assessment"] == "是"
+    assert "listing_maintainer" not in rows[0]
+    assert "include_inventory_age_assessment" not in rows[0]
     assert rows[0]["project_group"] == "GroupA"
+
+
+def test_bulk_update_product_lock_status_updates_rows_and_logs(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    msku TEXT,
+                    sku TEXT,
+                    msku_lock_status TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_operation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    changed_by TEXT NOT NULL,
+                    change_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, msku, sku, msku_lock_status)
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'SKU-001', NULL),
+                    (2, 'SAYOLA:US', 'MSKU-002', 'SKU-002', NULL)
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    result = service.bulk_update_product_lock_status([1, 2], "锁", changed_by="admin")
+
+    assert result == {"updated": 2, "requested": 2}
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT id, msku_lock_status FROM amazon_product_info ORDER BY id")
+        ).mappings().all()
+        logs = conn.execute(
+            text("SELECT record_id, operation_type, changed_by, change_data FROM amazon_operation_log ORDER BY record_id")
+        ).mappings().all()
+
+    assert [dict(row) for row in rows] == [
+        {"id": 1, "msku_lock_status": "锁"},
+        {"id": 2, "msku_lock_status": "锁"},
+    ]
+    assert [log["record_id"] for log in logs] == [1, 2]
+    assert all(log["operation_type"] == "BULK_UPDATE" for log in logs)
+    assert all(log["changed_by"] == "admin" for log in logs)
+    assert json.loads(logs[0]["change_data"]) == {
+        "msku_lock_status": {"old": None, "new": "锁"}
+    }
+
+
+def test_bulk_update_product_lock_status_rejects_lock_conflict(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    msku TEXT,
+                    sku TEXT,
+                    msku_lock_status TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_operation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    changed_by TEXT NOT NULL,
+                    change_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, msku, sku, msku_lock_status)
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'SKU-001', '锁'),
+                    (2, 'SAYOLA:US', 'MSKU-002', 'SKU-001', NULL)
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    with pytest.raises(LockConflictError):
+        service.bulk_update_product_lock_status([2], "锁", changed_by="admin")
+
+    with engine.connect() as conn:
+        status = conn.execute(
+            text("SELECT msku_lock_status FROM amazon_product_info WHERE id = 2")
+        ).scalar_one()
+        log_count = conn.execute(text("SELECT COUNT(*) FROM amazon_operation_log")).scalar_one()
+
+    assert status is None
+    assert log_count == 0
+
+
+def test_list_products_reuses_cached_page(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    asin TEXT,
+                    msku TEXT,
+                    store_site TEXT,
+                    product_name TEXT,
+                    sku TEXT,
+                    brand TEXT,
+                    sales_status TEXT,
+                    listing TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, asin, msku, store_site, product_name, sku, brand, sales_status, listing, updated_at
+                )
+                VALUES (1, 'B001', 'MSKU-001', 'SAYOLA:US', 'Product A', 'SKU-001', 'BrandA', '在售', 'RB833', '2026-06-05')
+                """
+            )
+        )
+
+    connect_count = 0
+    original_connect = engine.connect
+
+    def counted_connect(*args, **kwargs):
+        nonlocal connect_count
+        connect_count += 1
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    monkeypatch.setattr(engine, "connect", counted_connect)
+    service.clear_product_list_cache()
+
+    first = list_products(ProductFilters())
+    second = list_products(ProductFilters())
+
+    assert first == second
+    assert connect_count == 1
 
 
 def test_list_products_for_export_uses_filters_without_pagination(monkeypatch):
@@ -325,6 +518,74 @@ def test_export_products_to_xlsx_uses_selected_safe_fields(monkeypatch):
 
     assert [cell.value for cell in sheet[1]] == ["MSKU", "仓储类型", "Listing 负责人", "项目组"]
     assert [cell.value for cell in sheet[2]] == ["MSKU-001", "FBA", "OwnerA", "GroupA"]
+
+
+def test_get_filter_options_reuses_cached_values(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    brand TEXT,
+                    sales_status TEXT,
+                    listing TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    owner TEXT,
+                    listing_status TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (store_site, brand, sales_status, listing)
+                VALUES ('SAYOLA:US', 'BrandA', '在售', 'RB833')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (owner, listing_status, project_group)
+                VALUES ('OwnerA', 'Active', 'GroupA')
+                """
+            )
+        )
+
+    connect_count = 0
+
+    def fake_get_engine():
+        return engine
+
+    original_connect = engine.connect
+
+    def counted_connect(*args, **kwargs):
+        nonlocal connect_count
+        connect_count += 1
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(service, "get_engine", fake_get_engine)
+    monkeypatch.setattr(engine, "connect", counted_connect)
+    service.clear_filter_options_cache()
+
+    first = service.get_filter_options()
+    second = service.get_filter_options()
+
+    assert first == second
+    assert connect_count == 1
 
 
 def test_create_product_rejects_second_locked_msku_for_same_store_site_sku(monkeypatch):

@@ -24,6 +24,8 @@ def test_home_page_renders_admin_shell(monkeypatch):
     assert "产品信息" in response.text
     assert "店铺站点" in response.text
     assert "Listing 负责人" in response.text
+    assert 'data-app-content' in response.text
+    assert 'data-partial-nav' in response.text
 
 
 def test_health_endpoint_returns_ok():

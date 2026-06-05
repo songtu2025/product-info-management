@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% macro value(text) -%}
   {{ text if text not in [None, ""] else "-" }}
@@ -18,6 +18,7 @@
       <p class="quality-copy">
         共 {{ report.total }} 条产品。当前只做只读检查，不修改任何数据。
       </p>
+      <a class="btn-secondary mt-3 inline-flex items-center" href="/data-quality/export">导出问题清单</a>
     </div>
     <div class="quality-stat-grid">
       <div class="quality-stat">

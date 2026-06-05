@@ -67,6 +67,29 @@ def test_product_detail_renders_product_store_and_owner(monkeypatch):
     assert "/operation-logs?table_name=amazon_product_info&amp;record_id=7" in response.text
 
 
+def test_product_detail_links_to_create_listing_owner_when_missing(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_product_detail",
+        lambda product_id: {
+            "product": {
+                "id": product_id,
+                "msku": "MSKU-001",
+                "store_site": "SAYOLA:US",
+                "listing": "ListingA",
+                "product_name": "Test Product",
+            },
+            "store_site": None,
+            "owner": None,
+        },
+    )
+
+    response = client.get("/products/7")
+
+    assert response.status_code == 200
+    assert "创建负责人配置" in response.text
+    assert "/listing-owners/new?store_site=SAYOLA%3AUS&amp;listing=ListingA" in response.text
+
+
 def test_product_detail_returns_404_when_missing(monkeypatch):
     monkeypatch.setattr(
         "app.modules.product_info.routes.get_product_detail",

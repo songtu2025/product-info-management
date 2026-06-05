@@ -10,6 +10,7 @@ import pytest
 from app.modules.listing_owner.service import (
     DuplicateListingOwnerError,
     ListingOwnerFilters,
+    bulk_assign_listing_owner_from_products,
     build_create_payload,
     build_update_payload,
     create_listing_owner,
@@ -301,6 +302,160 @@ def test_get_filter_options_returns_distinct_values(monkeypatch):
     }
 
 
+def test_get_filter_options_reuses_cached_values(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    store_site, listing, owner, listing_status,
+                    listing_maintainer, include_inventory_age_assessment, project_group
+                )
+                VALUES ('SAYOLA:US', 'RB833', '张三', '正常', '李四', '是', '项目组A')
+                """
+            )
+        )
+
+    connect_count = 0
+    original_connect = engine.connect
+
+    def counted_connect(*args, **kwargs):
+        nonlocal connect_count
+        connect_count += 1
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    monkeypatch.setattr(engine, "connect", counted_connect)
+    service.clear_filter_options_cache()
+
+    assert service.get_filter_options() == service.get_filter_options()
+    assert connect_count == 1
+
+
+def test_bulk_assign_listing_owner_from_products_creates_and_updates_configs(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_operation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    changed_by TEXT NOT NULL,
+                    change_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, listing)
+                VALUES
+                    (1, 'SAYOLA:US', 'RB833'),
+                    (2, 'SAYOLA:US', 'RB832'),
+                    (3, 'SAYOLA:US', NULL)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    id, store_site, listing, owner, listing_status
+                )
+                VALUES (10, 'SAYOLA:US', 'RB833', '旧负责人', '正常')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    result = bulk_assign_listing_owner_from_products([1, 2, 3], "新负责人", changed_by="admin")
+
+    assert result == {"created": 1, "updated": 1, "skipped": 1, "requested": 3}
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT store_site, listing, owner
+                FROM amazon_listing_owner_config
+                ORDER BY listing
+                """
+            )
+        ).mappings().all()
+        logs = conn.execute(
+            text(
+                """
+                SELECT table_name, record_id, operation_type, changed_by, change_data
+                FROM amazon_operation_log
+                ORDER BY operation_type, record_id
+                """
+            )
+        ).mappings().all()
+
+    assert [dict(row) for row in rows] == [
+        {"store_site": "SAYOLA:US", "listing": "RB832", "owner": "新负责人"},
+        {"store_site": "SAYOLA:US", "listing": "RB833", "owner": "新负责人"},
+    ]
+    assert {log["operation_type"] for log in logs} == {"INSERT", "UPDATE"}
+    assert all(log["table_name"] == "amazon_listing_owner_config" for log in logs)
+    assert all(log["changed_by"] == "admin" for log in logs)
+    assert any(
+        json.loads(log["change_data"]) == {"owner": {"old": "旧负责人", "new": "新负责人"}}
+        for log in logs
+    )
+
+
 def test_listing_owner_edit_page_does_not_allow_key_edit(monkeypatch):
     monkeypatch.setattr(
         "app.modules.listing_owner.routes.get_listing_owner",
@@ -398,6 +553,26 @@ def test_listing_owner_new_page_renders_create_form(monkeypatch):
 
     assert response.status_code == 200
     assert "新增 Listing 负责人" in response.text
+
+
+def test_listing_owner_new_page_prefills_store_site_and_listing(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.get_filter_options",
+        lambda: {
+            "store_sites": ["SAYOLA:US"],
+            "owners": [],
+            "listing_statuses": [],
+            "listing_maintainers": [],
+            "inventory_age_assessments": [],
+            "project_groups": [],
+        },
+    )
+
+    response = client.get("/listing-owners/new?store_site=SAYOLA%3AUS&listing=ListingA")
+
+    assert response.status_code == 200
+    assert '<option value="SAYOLA:US" selected>SAYOLA:US</option>' in response.text
+    assert 'name="listing" value="ListingA"' in response.text
     assert 'name="store_site"' in response.text
     assert 'option value="SAYOLA:US"' in response.text
     assert 'name="listing"' in response.text

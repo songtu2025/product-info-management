@@ -1,0 +1,5 @@
+{% set flash_message = pop_flash(request) %}
+{% if flash_message %}
+  <div class="flash-message flash-message-auto-dismiss" role="status">{{ flash_message }}</div>
+{% endif %}
+{% block content %}{% endblock %}

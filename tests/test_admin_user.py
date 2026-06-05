@@ -57,6 +57,9 @@ def test_admin_user_list_renders_rows_without_password_hash(monkeypatch):
     assert "admin" in response.text
     assert "viewer" in response.text
     assert "password_hash" not in response.text
+    assert 'class="panel-heading"' in response.text
+    assert 'class="data-table text-sm"' in response.text
+    assert 'class="row-actions"' in response.text
     assert "/admin-users/1/edit" in response.text
     assert "/admin-users/1/reset-password" in response.text
     assert "启用" in response.text
@@ -118,6 +121,9 @@ def test_admin_user_new_page_renders_create_form():
     assert "name=\"password\"" in response.text
     assert "name=\"role\"" in response.text
     assert "name=\"is_active\"" in response.text
+    assert 'class="form-shell"' in response.text
+    assert 'class="form-section"' in response.text
+    assert 'class="form-actions"' in response.text
 
 
 def test_admin_user_create_post_creates_user_and_redirects(monkeypatch):
@@ -216,6 +222,9 @@ def test_admin_user_edit_page_renders_role_and_status_only(monkeypatch):
     assert "name=\"is_active\"" in response.text
     assert "name=\"username\"" not in response.text
     assert "name=\"password\"" not in response.text
+    assert 'class="form-shell"' in response.text
+    assert 'class="form-section"' in response.text
+    assert 'class="form-actions"' in response.text
 
 
 def test_admin_user_edit_post_updates_user_and_redirects(monkeypatch):
@@ -327,6 +336,9 @@ def test_admin_user_reset_password_page_renders_password_only(monkeypatch):
     assert "name=\"username\"" not in response.text
     assert "name=\"role\"" not in response.text
     assert "name=\"is_active\"" not in response.text
+    assert 'class="form-shell"' in response.text
+    assert 'class="form-section"' in response.text
+    assert 'class="form-actions"' in response.text
 
 
 def test_admin_user_reset_password_post_updates_password_and_redirects(monkeypatch):

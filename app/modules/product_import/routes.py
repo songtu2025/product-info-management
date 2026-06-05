@@ -5,6 +5,7 @@ from app.core.config import get_settings
 from app.core.security import require_admin
 from app.core.templates import templates
 from app.modules.product_import.service import (
+    build_product_import_issue_workbook,
     build_product_import_template,
     commit_product_import,
     load_import_upload,
@@ -41,6 +42,25 @@ def product_import_template(request: Request):
         content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="product_import_template.xlsx"'},
+    )
+
+
+@router.get("/products/import/issues")
+def product_import_issues(request: Request, import_token: str):
+    require_admin(request)
+    content = load_import_upload(import_token)
+    if content is None:
+        preview = {
+            "missing_product_rows": [],
+            "error_rows": [{"row_number": None, "message": "导入文件已失效，请重新上传。"}],
+        }
+    else:
+        preview = preview_product_import(content)
+
+    return Response(
+        build_product_import_issue_workbook(preview),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="product_import_issues.xlsx"'},
     )
 
 

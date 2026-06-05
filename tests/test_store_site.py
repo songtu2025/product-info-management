@@ -238,6 +238,48 @@ def test_build_store_site_create_payload_keeps_create_fields():
     }
 
 
+def test_list_store_sites_reuses_cached_unfiltered_rows(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    store TEXT,
+                    country TEXT,
+                    domain TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site, store, country, domain, updated_at)
+                VALUES (1, 'SAYOLA:US', 'SAYOLA', 'US', 'amazon.com', '2026-06-05')
+                """
+            )
+        )
+
+    connect_count = 0
+    original_connect = engine.connect
+
+    def counted_connect(*args, **kwargs):
+        nonlocal connect_count
+        connect_count += 1
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    monkeypatch.setattr(engine, "connect", counted_connect)
+    service.clear_store_site_list_cache()
+
+    assert service.list_store_sites() == service.list_store_sites()
+    assert connect_count == 1
+
+
 def test_create_store_site_writes_operation_log(monkeypatch):
     engine = create_engine("sqlite://")
     with engine.begin() as conn:

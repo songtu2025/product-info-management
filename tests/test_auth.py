@@ -32,6 +32,21 @@ def setup_auth_db(monkeypatch):
         conn.execute(
             text(
                 """
+                CREATE TABLE amazon_operation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    changed_by TEXT NOT NULL,
+                    change_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
                 INSERT INTO amazon_admin_user (id, username, password_hash, role, is_active)
                 VALUES
                     (1, 'admin', :admin_hash, 'admin', 1),
@@ -96,6 +111,92 @@ def test_admin_login_allows_backend_access(monkeypatch):
     assert "/logout" in response.text
     assert "/admin-users" in response.text
     assert "/products/import" in response.text
+    assert "/account/password" in response.text
+
+
+def test_change_password_page_requires_login(monkeypatch):
+    setup_auth_db(monkeypatch)
+    app.state.disable_auth = False
+    client.cookies.clear()
+
+    response = client.get("/account/password", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/login")
+
+
+def test_logged_in_user_can_change_own_password(monkeypatch):
+    engine = setup_auth_db(monkeypatch)
+    app.state.disable_auth = False
+    client.cookies.clear()
+
+    client.post(
+        "/login",
+        data={"username": "viewer", "password": "viewer-pass"},
+        follow_redirects=False,
+    )
+
+    page = client.get("/account/password")
+    response = client.post(
+        "/account/password",
+        data={
+            "current_password": "viewer-pass",
+            "new_password": "viewer-new-pass",
+            "confirm_password": "viewer-new-pass",
+        },
+        follow_redirects=False,
+    )
+
+    assert page.status_code == 200
+    assert "修改密码" in page.text
+    assert response.status_code == 303
+    assert response.headers["location"] == "/account/password"
+
+    client.get("/logout", follow_redirects=False)
+    old_login = client.post(
+        "/login",
+        data={"username": "viewer", "password": "viewer-pass"},
+        follow_redirects=False,
+    )
+    new_login = client.post(
+        "/login",
+        data={"username": "viewer", "password": "viewer-new-pass"},
+        follow_redirects=False,
+    )
+
+    assert old_login.status_code == 400
+    assert new_login.status_code == 303
+    with engine.connect() as conn:
+        log = conn.execute(
+            text("SELECT table_name, operation_type, changed_by, change_data FROM amazon_operation_log")
+        ).mappings().one()
+    assert log["table_name"] == "amazon_admin_user"
+    assert log["operation_type"] == "CHANGE_PASSWORD"
+    assert log["changed_by"] == "viewer"
+    assert "viewer-new-pass" not in log["change_data"]
+
+
+def test_change_password_rejects_wrong_current_password(monkeypatch):
+    setup_auth_db(monkeypatch)
+    app.state.disable_auth = False
+    client.cookies.clear()
+
+    client.post(
+        "/login",
+        data={"username": "viewer", "password": "viewer-pass"},
+        follow_redirects=False,
+    )
+    response = client.post(
+        "/account/password",
+        data={
+            "current_password": "bad-pass",
+            "new_password": "viewer-new-pass",
+            "confirm_password": "viewer-new-pass",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "原密码不正确" in response.text
 
 
 def test_viewer_cannot_use_admin_import_page(monkeypatch):
@@ -198,6 +299,8 @@ def test_viewer_cannot_post_write_actions_directly(monkeypatch):
     requests = [
         ("/products/new", {"store_site": "SAYOLA:US", "msku": "MSKU-1"}),
         ("/products/1/edit", {"product_name": "changed"}),
+        ("/products/bulk-lock", {"product_ids": ["1"], "lock_status": "锁"}),
+        ("/products/bulk-listing-owner", {"product_ids": ["1"], "owner": "张三"}),
         ("/store-sites/new", {"store_site": "SAYOLA:US"}),
         ("/store-sites/1/edit", {"store": "changed"}),
         ("/listing-owners/new", {"store_site": "SAYOLA:US", "listing": "RB833"}),
