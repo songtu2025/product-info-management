@@ -68,6 +68,17 @@ def test_get_product_quality_report_counts_missing_fields(monkeypatch):
 
     assert report["total"] == 3
     issues = {issue["key"]: issue for issue in report["issues"]}
+    assert [issue["key"] for issue in report["field_issues"]] == [
+        "missing_asin",
+        "missing_listing",
+        "missing_brand",
+        "missing_sales_status",
+        "missing_product_name",
+    ]
+    assert [issue["key"] for issue in report["relation_issues"]] == [
+        "missing_listing_owner_config",
+        "orphan_listing_owner_config",
+    ]
     assert [issues[key] for key in [
         "missing_asin",
         "missing_listing",
@@ -160,11 +171,21 @@ def test_get_product_quality_report_counts_listing_owner_integrity(monkeypatch):
 
     assert issues["missing_listing_owner_config"]["count"] == 1
     assert issues["missing_listing_owner_config"]["rows"] == [
-        {"id": 2, "store_site": "SAYOLA:US", "msku": "MSKU-002", "product_name": "Product 2"}
+        {
+            "id": 2,
+            "store_site": "SAYOLA:US",
+            "msku": "MSKU-002",
+            "listing": "L2",
+            "product_name": "Product 2",
+        }
     ]
     assert issues["orphan_listing_owner_config"]["count"] == 1
     assert issues["orphan_listing_owner_config"]["rows"] == [
         {"id": 2, "store_site": "SAYOLA:US", "listing": "L404", "owner": "Bob"}
+    ]
+    assert [issue["key"] for issue in report["relation_issues"]] == [
+        "missing_listing_owner_config",
+        "orphan_listing_owner_config",
     ]
 
 
@@ -254,6 +275,53 @@ def test_data_quality_page_renders_report(monkeypatch):
                     ],
                 }
             ],
+            "field_issues": [
+                {
+                    "key": "missing_asin",
+                    "label": "缺 ASIN",
+                    "field": "asin",
+                    "count": 2,
+                    "rows": [
+                        {
+                            "id": 1,
+                            "store_site": "SAYOLA:US",
+                            "msku": "MSKU-001",
+                            "product_name": "Product 1",
+                        }
+                    ],
+                }
+            ],
+            "relation_issues": [
+                {
+                    "key": "missing_listing_owner_config",
+                    "label": "缺 Listing 负责人配置",
+                    "field": "listing",
+                    "count": 1,
+                    "rows": [
+                        {
+                            "id": 2,
+                            "store_site": "SAYOLA:US",
+                            "msku": "MSKU-002",
+                            "listing": "Listing A",
+                            "product_name": "Product 2",
+                        }
+                    ],
+                },
+                {
+                    "key": "orphan_listing_owner_config",
+                    "label": "无产品使用的负责人配置",
+                    "field": "listing",
+                    "count": 1,
+                    "rows": [
+                        {
+                            "id": 3,
+                            "store_site": "SAYOLA:US",
+                            "listing": "Listing B",
+                            "owner": "Bob",
+                        }
+                    ],
+                },
+            ],
         },
     )
 
@@ -265,6 +333,11 @@ def test_data_quality_page_renders_report(monkeypatch):
     assert "缺 ASIN" in response.text
     assert "MSKU-001" in response.text
     assert "/products/1" in response.text
+    assert "字段完整性" in response.text
+    assert "业务关系健康" in response.text
+    assert "缺 Listing 负责人配置" in response.text
+    assert "/listing-owners/new?store_site=SAYOLA%3AUS&amp;listing=Listing%20A" in response.text
+    assert "/listing-owners?q=Listing%20B" in response.text
 
 
 def test_data_quality_export_route_downloads_workbook(monkeypatch):
@@ -328,6 +401,38 @@ def test_data_quality_page_uses_workbench_layout(monkeypatch):
                     "rows": [],
                 },
             ],
+            "field_issues": [
+                {
+                    "key": "missing_asin",
+                    "label": "缺 ASIN",
+                    "field": "asin",
+                    "count": 2,
+                    "rows": [
+                        {
+                            "id": 1,
+                            "store_site": "SAYOLA:US",
+                            "msku": "MSKU-001",
+                            "product_name": "Product 1",
+                        }
+                    ],
+                },
+                {
+                    "key": "missing_listing",
+                    "label": "缺 Listing",
+                    "field": "listing",
+                    "count": 0,
+                    "rows": [],
+                },
+            ],
+            "relation_issues": [
+                {
+                    "key": "missing_listing_owner_config",
+                    "label": "缺 Listing 负责人配置",
+                    "field": "listing",
+                    "count": 0,
+                    "rows": [],
+                }
+            ],
         },
     )
 
@@ -337,5 +442,7 @@ def test_data_quality_page_uses_workbench_layout(monkeypatch):
     assert 'class="quality-workbench"' in response.text
     assert "检查项概览" in response.text
     assert "问题明细" in response.text
+    assert "字段完整性" in response.text
+    assert "业务关系健康" in response.text
     assert "优先处理" in response.text
     assert "已通过" in response.text

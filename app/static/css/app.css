@@ -383,8 +383,14 @@ textarea {
 
 .quality-stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .quality-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .quality-stat {
@@ -398,6 +404,11 @@ textarea {
 .quality-stat-warning {
   border-color: #fed7aa;
   background: #fff7ed;
+}
+
+.quality-stat-relation {
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 
 .quality-stat-label {
@@ -443,6 +454,24 @@ textarea {
   margin-top: 18px;
 }
 
+.quality-overview-groups,
+.quality-detail-group {
+  display: grid;
+  gap: 14px;
+}
+
+.quality-overview-group,
+.quality-detail-group {
+  min-width: 0;
+}
+
+.quality-group-title {
+  margin-bottom: 8px;
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .quality-metrics {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -458,6 +487,12 @@ textarea {
 @media (min-width: 1280px) {
   .quality-metrics {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .quality-relation-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

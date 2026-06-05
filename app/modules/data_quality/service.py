@@ -27,7 +27,7 @@ RELATION_RULES = (
 def get_product_quality_report() -> dict[str, object]:
     engine = get_engine()
     if engine is None:
-        return {"total": 0, "issues": _empty_issues()}
+        return _build_report(0, _empty_field_issues(), _empty_relation_issues())
     now = monotonic()
     engine_id = id(engine)
     if (
@@ -41,7 +41,7 @@ def get_product_quality_report() -> dict[str, object]:
 
     with engine.connect() as conn:
         total = conn.execute(total_sql).scalar_one()
-        issues = []
+        field_issues = []
         for key, label, field in QUALITY_RULES:
             where_sql = f"{field} IS NULL OR TRIM({field}) = ''"
             count = conn.execute(
@@ -61,7 +61,7 @@ def get_product_quality_report() -> dict[str, object]:
                     )
                 ).mappings()
             ]
-            issues.append(
+            field_issues.append(
                 {
                     "key": key,
                     "label": label,
@@ -70,9 +70,9 @@ def get_product_quality_report() -> dict[str, object]:
                     "rows": rows,
                 }
             )
-        issues.extend(_get_relation_issues(conn))
+        relation_issues = _get_relation_issues(conn)
 
-    report = {"total": total, "issues": issues}
+    report = _build_report(total, field_issues, relation_issues)
     _quality_report_cache.update(
         {
             "engine_id": engine_id,
@@ -142,7 +142,7 @@ def _get_relation_issues(conn) -> list[dict[str, object]]:
         for row in conn.execute(
             text(
                 f"""
-                SELECT p.id, p.store_site, p.msku, p.product_name
+                SELECT p.id, p.store_site, p.msku, p.listing, p.product_name
                 FROM amazon_product_info p
                 LEFT JOIN amazon_listing_owner_config lo
                   ON p.store_site = lo.store_site
@@ -212,10 +212,14 @@ def _listing_owner_table_available(conn) -> bool:
 
 
 def _empty_issues() -> list[dict[str, object]]:
+    return _empty_field_issues() + _empty_relation_issues()
+
+
+def _empty_field_issues() -> list[dict[str, object]]:
     return [
         {"key": key, "label": label, "field": field, "count": 0, "rows": []}
         for key, label, field in QUALITY_RULES
-    ] + _empty_relation_issues()
+    ]
 
 
 def _empty_relation_issues() -> list[dict[str, object]]:
@@ -223,3 +227,16 @@ def _empty_relation_issues() -> list[dict[str, object]]:
         {"key": key, "label": label, "field": "listing", "count": 0, "rows": []}
         for key, label in RELATION_RULES
     ]
+
+
+def _build_report(
+    total: int,
+    field_issues: list[dict[str, object]],
+    relation_issues: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "total": total,
+        "issues": field_issues + relation_issues,
+        "field_issues": field_issues,
+        "relation_issues": relation_issues,
+    }
