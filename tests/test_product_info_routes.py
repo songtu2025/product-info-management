@@ -338,6 +338,77 @@ def test_product_list_renders_clear_filter_link(monkeypatch):
     assert 'data-clear-product-filters href="/?"' not in response.text
 
 
+def test_product_list_renders_active_filter_summary(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_products",
+        lambda filters: {"rows": [], "total": 0, "page": 1, "page_size": 20, "pages": 0},
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {
+            "store_sites": ["SAYOLA:US"],
+            "brands": ["BrandA"],
+            "sales_statuses": ["在售"],
+            "listings": ["ListingA"],
+            "listing_owners": ["OwnerA"],
+            "listing_owner_statuses": ["Active"],
+            "project_groups": ["GroupA"],
+        },
+    )
+
+    response = client.get(
+        "/",
+        params={
+            "q": "abc",
+            "store_site": "SAYOLA:US",
+            "brand": "BrandA",
+            "sales_status": "在售",
+            "listing": "ListingA",
+            "listing_owner": "OwnerA",
+            "listing_owner_status": "Active",
+            "project_group": "GroupA",
+            "page_size": "100",
+        },
+    )
+
+    assert response.status_code == 200
+    assert 'data-active-product-filters' in response.text
+    assert "已筛选" in response.text
+    assert "关键词：abc" in response.text
+    assert "店铺站点：SAYOLA:US" in response.text
+    assert "品牌：BrandA" in response.text
+    assert "销售状态：在售" in response.text
+    assert "Listing：ListingA" in response.text
+    assert "负责人：OwnerA" in response.text
+    assert "Listing 状态：Active" in response.text
+    assert "项目组：GroupA" in response.text
+    assert "每页行数：100" not in response.text
+
+
+def test_product_list_hides_active_filter_summary_without_filters(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_products",
+        lambda filters: {"rows": [], "total": 0, "page": 1, "page_size": 20, "pages": 0},
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {
+            "store_sites": [],
+            "brands": [],
+            "sales_statuses": [],
+            "listings": [],
+            "listing_owners": [],
+            "listing_owner_statuses": [],
+            "project_groups": [],
+        },
+    )
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'data-active-product-filters' not in response.text
+
+
 def test_product_list_passes_page_size_and_keeps_it_in_pagination(monkeypatch):
     captured = {}
 

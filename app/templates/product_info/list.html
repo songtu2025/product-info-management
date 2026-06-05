@@ -120,6 +120,37 @@
         </select>
       </label>
     </div>
+
+    {% set has_active_filters = filters.q or filters.store_site or filters.brand or filters.sales_status or filters.listing or filters.listing_owner or filters.listing_owner_status or filters.project_group %}
+    {% if has_active_filters %}
+      <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3" data-active-product-filters>
+        <span class="text-sm font-bold text-slate-500">已筛选</span>
+        {% if filters.q %}
+          <span class="status-badge status-badge-muted">关键词：{{ filters.q }}</span>
+        {% endif %}
+        {% if filters.store_site %}
+          <span class="status-badge status-badge-muted">店铺站点：{{ filters.store_site }}</span>
+        {% endif %}
+        {% if filters.brand %}
+          <span class="status-badge status-badge-muted">品牌：{{ filters.brand }}</span>
+        {% endif %}
+        {% if filters.sales_status %}
+          <span class="status-badge status-badge-muted">销售状态：{{ filters.sales_status }}</span>
+        {% endif %}
+        {% if filters.listing %}
+          <span class="status-badge status-badge-muted">Listing：{{ filters.listing }}</span>
+        {% endif %}
+        {% if filters.listing_owner %}
+          <span class="status-badge status-badge-muted">负责人：{{ filters.listing_owner }}</span>
+        {% endif %}
+        {% if filters.listing_owner_status %}
+          <span class="status-badge status-badge-muted">Listing 状态：{{ filters.listing_owner_status }}</span>
+        {% endif %}
+        {% if filters.project_group %}
+          <span class="status-badge status-badge-muted">项目组：{{ filters.project_group }}</span>
+        {% endif %}
+      </div>
+    {% endif %}
   </form>
 
   <section class="filter-panel mb-4" data-filter-view-panel>
