@@ -964,6 +964,21 @@ textarea {
   font-weight: 800;
 }
 
+.flash-message-auto-dismiss {
+  animation: flash-message-dismiss 0.5s ease 4s forwards;
+  overflow: hidden;
+}
+
+@keyframes flash-message-dismiss {
+  to {
+    margin-bottom: 0;
+    max-height: 0;
+    opacity: 0;
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+}
+
 .form-section {
   border-top: 1px solid var(--border-subtle);
 }

@@ -32,12 +32,21 @@ def test_product_edit_success_flash_is_shown_once(monkeypatch):
 
     assert response.status_code == 200
     assert "产品信息已保存。" in response.text
-    assert 'class="flash-message"' in response.text
+    assert 'class="flash-message flash-message-auto-dismiss"' in response.text
 
     refreshed = client.get("/products/7")
 
     assert refreshed.status_code == 200
     assert "产品信息已保存。" not in refreshed.text
+
+
+def test_flash_message_has_auto_dismiss_styles():
+    with open("app/static/css/app.css", encoding="utf-8") as css_file:
+        css = css_file.read()
+
+    assert ".flash-message-auto-dismiss" in css
+    assert "flash-message-dismiss" in css
+    assert "@keyframes flash-message-dismiss" in css
 
 
 def test_store_site_success_flash_on_list(monkeypatch):
