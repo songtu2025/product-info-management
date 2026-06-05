@@ -530,6 +530,132 @@ textarea {
   color: var(--text-muted);
 }
 
+.import-page {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.import-panel {
+  overflow: hidden;
+}
+
+.import-steps {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: #f8fafc;
+  padding: 14px 16px;
+}
+
+@media (min-width: 768px) {
+  .import-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.import-step {
+  min-height: 38px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #fff;
+  padding: 9px 11px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.import-step-active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: var(--primary);
+}
+
+.import-step-done {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #047857;
+}
+
+.import-workbench-grid {
+  display: grid;
+  gap: 18px;
+  padding: 18px 16px;
+}
+
+@media (min-width: 1024px) {
+  .import-workbench-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+    align-items: end;
+  }
+}
+
+.import-title {
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.import-copy,
+.import-section-copy {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.import-upload-form {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.import-preview-panel {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.import-preview-heading {
+  padding: 16px 16px 12px;
+}
+
+.import-section-title {
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.import-stat-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 13px;
+}
+
+.import-stat-card-ok {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.import-stat-card-warn {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.import-stat-card-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.import-commit-panel {
+  margin: 0 16px 16px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  padding: 14px;
+}
+
 .list-panel-tools {
   display: flex;
   flex-direction: column;

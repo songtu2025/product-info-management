@@ -1,20 +1,32 @@
 {% extends "layout.html" %}
 
 {% block content %}
-  <div class="content-panel">
-    <div class="border-b border-slate-200 px-4 py-4">
-      <h2 class="text-base font-semibold text-slate-950">产品信息导入预览</h2>
-      <p class="mt-1 text-sm text-slate-500">只校验 Excel，不写入数据库。</p>
-      <a class="btn-secondary mt-3 inline-flex items-center" href="/products/import/template">下载导入模板</a>
+  {% set has_preview = preview is not none %}
+  {% set has_commit = commit_result is not none %}
+  <div class="import-page">
+  <div class="import-workbench">
+  <div class="content-panel import-panel">
+    <div class="import-steps">
+      <div class="import-step import-step-done">1 下载模板</div>
+      <div class="import-step {% if has_preview or has_commit %}import-step-done{% else %}import-step-active{% endif %}">2 上传校验</div>
+      <div class="import-step {% if has_commit %}import-step-done{% elif has_preview %}import-step-active{% endif %}">3 确认写入</div>
     </div>
 
-    <form class="space-y-4 px-4 py-5" action="/products/import/preview" method="post" enctype="multipart/form-data">
-      <label class="field max-w-xl">
-        <span class="field-label">上传 Excel</span>
-        <input class="field-input" name="file" type="file" accept=".xlsx" required>
-      </label>
-      <button class="btn-primary" type="submit">校验预览</button>
-    </form>
+    <div class="import-workbench-grid">
+      <div class="import-workbench-copy">
+        <h2 class="import-title">产品信息导入</h2>
+        <p class="import-copy">先下载模板并填写产品维护字段，上传后只做校验预览。确认写入前不会修改数据库。</p>
+        <a class="btn-secondary mt-3 inline-flex items-center" href="/products/import/template">下载导入模板</a>
+      </div>
+
+      <form class="import-upload-form" action="/products/import/preview" method="post" enctype="multipart/form-data">
+        <label class="field">
+          <span class="field-label">上传 Excel</span>
+          <input class="field-input" name="file" type="file" accept=".xlsx" required>
+        </label>
+        <button class="btn-primary" type="submit">校验预览</button>
+      </form>
+    </div>
 
     {% if error %}
       <div class="mx-4 mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -32,20 +44,28 @@
     {% endif %}
 
     {% if preview %}
-      <div class="grid gap-3 border-t border-slate-200 px-4 py-4 md:grid-cols-4">
-        <div class="rounded-md border border-slate-200 bg-slate-50 p-3">
+      <section class="import-preview-panel">
+      <div class="import-preview-heading">
+        <div>
+          <h3 class="import-section-title">校验结果</h3>
+          <p class="import-section-copy">确认可更新、未匹配和错误行后，再决定是否写入数据库。</p>
+        </div>
+      </div>
+
+      <div class="grid gap-3 px-4 pb-4 md:grid-cols-4">
+        <div class="import-stat-card">
           <div class="text-xs text-slate-500">总行数</div>
           <div class="mt-1 text-lg font-semibold text-slate-950">{{ preview.total_rows }}</div>
         </div>
-        <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+        <div class="import-stat-card import-stat-card-ok">
           <div class="text-xs text-emerald-700">可更新</div>
           <div class="mt-1 text-lg font-semibold text-emerald-800">可更新 {{ preview.valid_count }} 行</div>
         </div>
-        <div class="rounded-md border border-amber-200 bg-amber-50 p-3">
+        <div class="import-stat-card import-stat-card-warn">
           <div class="text-xs text-amber-700">未匹配产品</div>
           <div class="mt-1 text-lg font-semibold text-amber-800">{{ preview.missing_product_count }}</div>
         </div>
-        <div class="rounded-md border border-red-200 bg-red-50 p-3">
+        <div class="import-stat-card import-stat-card-error">
           <div class="text-xs text-red-700">错误行</div>
           <div class="mt-1 text-lg font-semibold text-red-800">{{ preview.error_count }}</div>
         </div>
@@ -58,7 +78,7 @@
       {% endif %}
 
       {% if import_token and not preview.blocked_fields and preview.missing_product_count == 0 and preview.error_count == 0 %}
-        <form class="mx-4 mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3" action="/products/import/commit" method="post">
+        <form class="import-commit-panel" action="/products/import/commit" method="post">
           <input type="hidden" name="import_token" value="{{ import_token }}">
           <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div class="text-sm text-emerald-800">校验通过，可确认写入数据库。</div>
@@ -129,6 +149,9 @@
           </div>
         </div>
       {% endif %}
+      </section>
     {% endif %}
+  </div>
+  </div>
   </div>
 {% endblock %}

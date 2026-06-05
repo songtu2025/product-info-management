@@ -286,6 +286,10 @@ def test_product_import_page_renders_upload_form():
     response = client.get("/products/import")
 
     assert response.status_code == 200
+    assert 'class="import-workbench"' in response.text
+    assert "1 下载模板" in response.text
+    assert "2 上传校验" in response.text
+    assert "3 确认写入" in response.text
     assert "上传 Excel" in response.text
     assert "name=\"file\"" in response.text
     assert "/products/import/template" in response.text
@@ -343,7 +347,10 @@ def test_product_import_preview_renders_result(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert 'class="import-preview-panel"' in response.text
     assert "可更新 1 行" in response.text
+    assert "校验结果" in response.text
+    assert "校验通过，可确认写入数据库。" in response.text
     assert "MSKU-001" in response.text
     assert "New Brand" in response.text
     assert "name=\"import_token\"" in response.text
