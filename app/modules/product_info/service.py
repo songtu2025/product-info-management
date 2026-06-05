@@ -143,6 +143,7 @@ LIST_COLUMNS = ",\n    ".join(PRODUCT_COLUMN_EXPRESSIONS[key] for key in LIST_FI
 EDITABLE_FIELDS = (
     "product_name",
     "brand",
+    "listing",
     "sales_status",
     "storage_type",
     "category_level_1",

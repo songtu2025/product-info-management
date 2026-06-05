@@ -45,6 +45,7 @@ def test_product_edit_page_renders_allowed_fields(monkeypatch):
     assert response.status_code == 200
     assert "Old Product" in response.text
     assert "name=\"product_name\"" in response.text
+    assert "name=\"listing\"" in response.text
     assert "name=\"sales_status\"" in response.text
     assert "name=\"msku\"" not in response.text
     assert "name=\"store_site\"" not in response.text
@@ -152,6 +153,7 @@ def test_product_edit_post_updates_and_redirects(monkeypatch):
         data={
             "product_name": "New Product",
             "brand": "BrandB",
+            "listing": "ListingB",
             "sales_status": "停售",
             "storage_type": "FBA",
             "category_level_1": "服饰",
@@ -170,6 +172,7 @@ def test_product_edit_post_updates_and_redirects(monkeypatch):
     assert response.headers["location"] == "/products/7"
     assert captured["product_id"] == 7
     assert captured["payload"]["product_name"] == "New Product"
+    assert captured["payload"]["listing"] == "ListingB"
     assert captured["changed_by"] == "test-admin"
     assert "msku" not in captured["payload"]
 
@@ -179,6 +182,7 @@ def test_build_update_payload_keeps_only_editable_fields():
         {
             "product_name": "  New Product  ",
             "brand": "BrandB",
+            "listing": " ListingB ",
             "msku": "SHOULD-NOT-BE-UPDATED",
             "store_site": "SHOULD-NOT-BE-UPDATED",
             "label_name": "",
@@ -188,6 +192,7 @@ def test_build_update_payload_keeps_only_editable_fields():
     assert payload == {
         "product_name": "New Product",
         "brand": "BrandB",
+        "listing": "ListingB",
         "label_name": None,
     }
 

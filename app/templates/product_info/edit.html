@@ -12,7 +12,7 @@
     <div>
       <a class="detail-back-link" href="/products/{{ product.id }}">返回详情</a>
       <h2 class="form-title">编辑产品信息</h2>
-      <p class="form-subtitle">只允许维护运营字段，关键定位字段保持只读。</p>
+      <p class="form-subtitle">允许维护 Listing 和运营字段，店铺站点、MSKU 保持只读。</p>
     </div>
   </div>
 
@@ -24,7 +24,7 @@
     <section class="form-section">
       <div class="form-section-heading">
         <h3 class="form-section-title">只读定位字段</h3>
-        <p class="form-section-subtitle">这些字段用于关联产品、店铺和 Listing，不在单条编辑中修改。</p>
+        <p class="form-section-subtitle">店铺站点和 MSKU 用于唯一定位产品，不在单条编辑中修改。</p>
       </div>
 
       <div class="p-4">
@@ -37,10 +37,6 @@
             <div class="read-only-label">MSKU</div>
             <div class="read-only-value mono">{{ product.msku or "-" }}</div>
           </div>
-          <div class="read-only-item">
-            <div class="read-only-label">Listing</div>
-            <div class="read-only-value">{{ product.listing or "-" }}</div>
-          </div>
         </div>
       </div>
     </section>
@@ -48,10 +44,10 @@
     <section class="form-section">
       <div class="form-section-heading">
         <h3 class="form-section-title">基础信息</h3>
-        <p class="form-section-subtitle">产品名称和品牌信息。</p>
+        <p class="form-section-subtitle">产品名称、品牌和 Listing 信息。</p>
       </div>
 
-      <div class="form-grid form-grid-2">
+      <div class="form-grid">
         <label class="field">
           <span class="field-label">产品名称</span>
           <input class="field-input" name="product_name" value="{{ value(product.product_name) }}">
@@ -59,6 +55,10 @@
         <label class="field">
           <span class="field-label">品牌</span>
           <input class="field-input" name="brand" value="{{ value(product.brand) }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing</span>
+          <input class="field-input" name="listing" value="{{ value(product.listing) }}">
         </label>
       </div>
     </section>

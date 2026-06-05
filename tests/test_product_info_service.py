@@ -644,6 +644,7 @@ def test_update_product_rejects_second_locked_msku_for_same_store_site_sku(monke
                     sku TEXT,
                     product_name TEXT,
                     brand TEXT,
+                    listing TEXT,
                     sales_status TEXT,
                     storage_type TEXT,
                     category_level_1 TEXT,
