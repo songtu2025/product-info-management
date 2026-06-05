@@ -3,6 +3,7 @@ from math import ceil
 from time import monotonic
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.db import get_engine
 from app.shared.audit import build_change_set, record_operation_log
@@ -46,25 +47,51 @@ def list_listing_owners(filters: ListingOwnerFilters | str | None = None) -> dic
         return _empty_page(filters)
 
     where_sql, params = _build_where(filters)
+    list_where_sql, _ = _build_where(filters, table_alias="lo")
     offset = (filters.page - 1) * filters.page_size
     params.update({"limit": filters.page_size, "offset": offset})
+
+    has_product_table = _product_table_available(engine)
+    product_count_sql = (
+        """
+            COALESCE(pc.product_count, 0) AS product_count
+        """
+        if has_product_table
+        else "0 AS product_count"
+    )
+    product_join_sql = (
+        """
+        LEFT JOIN (
+            SELECT store_site, listing, COUNT(*) AS product_count
+            FROM amazon_product_info
+            WHERE listing IS NOT NULL AND TRIM(listing) <> ''
+            GROUP BY store_site, listing
+        ) pc
+          ON pc.store_site = lo.store_site
+         AND pc.listing = lo.listing
+        """
+        if has_product_table
+        else ""
+    )
 
     count_sql = text(f"SELECT COUNT(*) FROM amazon_listing_owner_config {where_sql}")
     list_sql = text(
         f"""
         SELECT
-            id,
-            store_site,
-            listing,
-            owner,
-            listing_status,
-            listing_maintainer,
-            include_inventory_age_assessment,
-            project_group,
-            updated_at
-        FROM amazon_listing_owner_config
-        {where_sql}
-        ORDER BY store_site, listing
+            lo.id,
+            lo.store_site,
+            lo.listing,
+            lo.owner,
+            lo.listing_status,
+            lo.listing_maintainer,
+            lo.include_inventory_age_assessment,
+            lo.project_group,
+            {product_count_sql},
+            lo.updated_at
+        FROM amazon_listing_owner_config lo
+        {product_join_sql}
+        {list_where_sql}
+        ORDER BY lo.store_site, lo.listing
         LIMIT :limit OFFSET :offset
         """
     )
@@ -122,19 +149,34 @@ def clear_filter_options_cache() -> None:
     _filter_options_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
 
 
-def _build_where(filters: ListingOwnerFilters) -> tuple[str, dict[str, object]]:
+def _product_table_available(engine) -> bool:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1 FROM amazon_product_info LIMIT 1")).first()
+        return True
+    except SQLAlchemyError:
+        return False
+
+
+def _build_where(
+    filters: ListingOwnerFilters,
+    table_alias: str | None = None,
+) -> tuple[str, dict[str, object]]:
+    def column(field: str) -> str:
+        return f"{table_alias}.{field}" if table_alias else field
+
     clauses: list[str] = []
     params: dict[str, object] = {}
     if filters.q:
         clauses.append(
-            """
+            f"""
             (
-                store_site LIKE :q
-                OR listing LIKE :q
-                OR owner LIKE :q
-                OR listing_status LIKE :q
-                OR listing_maintainer LIKE :q
-                OR project_group LIKE :q
+                {column("store_site")} LIKE :q
+                OR {column("listing")} LIKE :q
+                OR {column("owner")} LIKE :q
+                OR {column("listing_status")} LIKE :q
+                OR {column("listing_maintainer")} LIKE :q
+                OR {column("project_group")} LIKE :q
             )
             """
         )
@@ -150,7 +192,7 @@ def _build_where(filters: ListingOwnerFilters) -> tuple[str, dict[str, object]]:
     }
     for field, value in exact_filters.items():
         if value:
-            clauses.append(f"{field} = :{field}")
+            clauses.append(f"{column(field)} = :{field}")
             params[field] = value
 
     if not clauses:

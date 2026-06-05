@@ -37,6 +37,7 @@ def test_listing_owner_list_renders_rows(monkeypatch):
                     "listing_maintainer": "李四",
                     "include_inventory_age_assessment": "是",
                     "project_group": "项目组A",
+                    "product_count": 2,
                     "updated_at": None,
                 }
             ],
@@ -64,6 +65,10 @@ def test_listing_owner_list_renders_rows(monkeypatch):
     assert "SAYOLA:US" in response.text
     assert "RB833" in response.text
     assert "张三" in response.text
+    assert "关联产品数" in response.text
+    assert "2" in response.text
+    assert "/?store_site=SAYOLA%3AUS&amp;listing=RB833" in response.text
+    assert "查看产品" in response.text
     assert "共 51 条，每页 50 行，当前第 2 页" in response.text
     assert 'name="page_size"' in response.text
     assert "首页" in response.text
@@ -251,6 +256,70 @@ def test_list_listing_owners_applies_structured_filters(monkeypatch):
 
     assert page["total"] == 1
     assert [row["id"] for row in page["rows"]] == [1]
+
+
+def test_list_listing_owners_counts_linked_products(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    id, store_site, listing, owner, listing_status,
+                    listing_maintainer, include_inventory_age_assessment, project_group, updated_at
+                )
+                VALUES
+                    (1, 'SAYOLA:US', 'RB833', '张三', '正常', '李四', '是', '项目组A', '2026-06-04'),
+                    (2, 'SAYOLA:US', 'RB832', '王五', '正常', '李四', '是', '项目组A', '2026-06-04')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, listing)
+                VALUES
+                    (1, 'SAYOLA:US', 'RB833'),
+                    (2, 'SAYOLA:US', 'RB833'),
+                    (3, 'OTHER:US', 'RB833')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    page = service.list_listing_owners(ListingOwnerFilters())
+
+    counts = {row["listing"]: row["product_count"] for row in page["rows"]}
+    assert counts == {"RB832": 0, "RB833": 2}
 
 
 def test_get_filter_options_returns_distinct_values(monkeypatch):
