@@ -179,6 +179,17 @@
                         {% if can_edit and row.store_site and row.listing %}
                           <a class="action-link" href="/listing-owners/new?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">创建负责人配置</a>
                         {% endif %}
+                      {% elif issue.key in ["unknown_product_store_site", "unknown_listing_owner_store_site"] %}
+                        {% if issue.key == "unknown_product_store_site" %}
+                          <a class="action-link" href="/products/{{ row.id }}">查看产品</a>
+                        {% elif row.listing %}
+                          <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>
+                        {% else %}
+                          <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">查看负责人配置</a>
+                        {% endif %}
+                        {% if can_edit and row.store_site %}
+                          <a class="action-link" href="/store-sites/new?store_site={{ row.store_site|urlencode }}">创建店铺站点</a>
+                        {% endif %}
                       {% else %}
                         {% if row.listing %}
                           <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>

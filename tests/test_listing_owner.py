@@ -16,6 +16,7 @@ from app.modules.listing_owner.service import (
     create_listing_owner,
     update_listing_owner,
 )
+from app.modules.store_site.service import UnknownStoreSiteError
 
 
 client = TestClient(app)
@@ -723,6 +724,39 @@ def test_listing_owner_new_post_shows_duplicate_error(monkeypatch):
     assert "RB833" in response.text
 
 
+def test_listing_owner_new_post_shows_unknown_store_site_error(monkeypatch):
+    def fake_create_listing_owner(payload, changed_by="system"):
+        raise UnknownStoreSiteError
+
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.create_listing_owner",
+        fake_create_listing_owner,
+    )
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.get_filter_options",
+        lambda: {
+            "store_sites": ["SAYOLA:US"],
+            "owners": [],
+            "listing_statuses": [],
+            "listing_maintainers": [],
+            "inventory_age_assessments": [],
+            "project_groups": [],
+        },
+    )
+
+    response = client.post(
+        "/listing-owners/new",
+        data={"store_site": "UNKNOWN:US", "listing": "RB833"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "店铺站点不存在，请先维护店铺站点" in response.text
+    assert "/store-sites/new" in response.text
+    assert "UNKNOWN:US" in response.text
+    assert "RB833" in response.text
+
+
 def test_build_listing_owner_update_payload_keeps_only_editable_fields():
     payload = build_update_payload(
         {
@@ -773,6 +807,24 @@ def test_build_listing_owner_create_payload_keeps_create_fields():
 def test_create_listing_owner_writes_operation_log(monkeypatch):
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site)
+                VALUES (1, 'SAYOLA:US')
+                """
+            )
+        )
         conn.execute(
             text(
                 """
@@ -839,6 +891,43 @@ def test_create_listing_owner_writes_operation_log(monkeypatch):
         "include_inventory_age_assessment": {"old": None, "new": "是"},
         "project_group": {"old": None, "new": "项目组A"},
     }
+
+
+def test_create_listing_owner_rejects_unknown_store_site(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    store_site TEXT NOT NULL,
+                    listing TEXT NOT NULL,
+                    owner TEXT
+                )
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    with pytest.raises(UnknownStoreSiteError):
+        create_listing_owner({"store_site": "UNKNOWN:US", "listing": "RB833"})
+
+    with engine.connect() as conn:
+        row_count = conn.execute(text("SELECT COUNT(*) FROM amazon_listing_owner_config")).scalar_one()
+
+    assert row_count == 0
 
 
 def test_create_listing_owner_rejects_duplicate_without_log(monkeypatch):

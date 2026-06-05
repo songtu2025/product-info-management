@@ -29,6 +29,7 @@ from app.modules.product_info.service import (
     update_product,
 )
 from app.modules.store_site.service import list_store_sites
+from app.modules.store_site.service import UnknownStoreSiteError
 from app.shared.flash import set_flash
 from app.shared.user_preference import get_user_preferences, save_user_preference
 
@@ -51,13 +52,27 @@ FILTER_VIEW_FIELDS = (
 )
 
 
-def build_product_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
+def build_product_new_context(
+    row: dict[str, object] | None = None,
+    error: str | None = None,
+    error_action_url: str | None = None,
+    error_action_label: str | None = None,
+) -> dict[str, object]:
+    row = row or {}
+    store_sites = list_store_sites()
+    selected_store_site = row.get("store_site")
+    store_site_values = {site.get("store_site") for site in store_sites}
+    if selected_store_site and selected_store_site not in store_site_values:
+        store_sites = [{"store_site": selected_store_site}, *store_sites]
+
     return {
         "app_name": get_settings().app_name,
         "active_nav": "产品信息",
-        "row": row or {},
-        "store_sites": list_store_sites(),
+        "row": row,
+        "store_sites": store_sites,
         "error": error,
+        "error_action_url": error_action_url,
+        "error_action_label": error_action_label,
     }
 
 
@@ -436,6 +451,18 @@ async def product_create(request: Request):
             request,
             "product_info/new.html",
             build_product_new_context(payload, LOCK_CONFLICT_MESSAGE),
+            status_code=400,
+        )
+    except UnknownStoreSiteError:
+        return templates.TemplateResponse(
+            request,
+            "product_info/new.html",
+            build_product_new_context(
+                payload,
+                "店铺站点不存在，请先维护店铺站点。",
+                "/store-sites/new",
+                "新增店铺站点",
+            ),
             status_code=400,
         )
 

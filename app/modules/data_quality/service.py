@@ -21,6 +21,8 @@ QUALITY_RULES = (
 RELATION_RULES = (
     ("missing_listing_owner_config", "缺 Listing 负责人配置"),
     ("orphan_listing_owner_config", "无产品使用的负责人配置"),
+    ("unknown_product_store_site", "产品引用未知店铺站点"),
+    ("unknown_listing_owner_store_site", "负责人配置引用未知店铺站点"),
 )
 
 
@@ -114,9 +116,22 @@ def build_quality_issue_workbook(report: dict[str, object]) -> bytes:
 
 
 def _get_relation_issues(conn) -> list[dict[str, object]]:
-    if not _listing_owner_table_available(conn):
-        return _empty_relation_issues()
+    issues = []
+    has_listing_owner_table = _listing_owner_table_available(conn)
+    if has_listing_owner_table:
+        issues.extend(_get_listing_owner_relation_issues(conn))
+    else:
+        issues.extend(_empty_listing_owner_relation_issues())
 
+    if _store_site_table_available(conn):
+        issues.extend(_get_store_site_relation_issues(conn, has_listing_owner_table))
+    else:
+        issues.extend(_empty_store_site_relation_issues())
+
+    return issues
+
+
+def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
     missing_where = """
         p.listing IS NOT NULL
         AND TRIM(p.listing) <> ''
@@ -203,9 +218,105 @@ def _get_relation_issues(conn) -> list[dict[str, object]]:
     ]
 
 
+def _get_store_site_relation_issues(conn, has_listing_owner_table: bool) -> list[dict[str, object]]:
+    unknown_product_where = """
+        p.store_site IS NOT NULL
+        AND TRIM(p.store_site) <> ''
+        AND ss.id IS NULL
+    """
+    unknown_owner_where = """
+        lo.store_site IS NOT NULL
+        AND TRIM(lo.store_site) <> ''
+        AND ss.id IS NULL
+    """
+    unknown_product_count = conn.execute(
+        text(
+            f"""
+            SELECT COUNT(*)
+            FROM amazon_product_info p
+            LEFT JOIN amazon_store_site ss
+              ON p.store_site = ss.store_site
+            WHERE {unknown_product_where}
+            """
+        )
+    ).scalar_one()
+    unknown_product_rows = [
+        dict(row)
+        for row in conn.execute(
+            text(
+                f"""
+                SELECT p.id, p.store_site, p.msku, p.listing, p.product_name
+                FROM amazon_product_info p
+                LEFT JOIN amazon_store_site ss
+                  ON p.store_site = ss.store_site
+                WHERE {unknown_product_where}
+                ORDER BY p.updated_at DESC, p.id DESC
+                LIMIT 20
+                """
+            )
+        ).mappings()
+    ]
+
+    unknown_owner_count = 0
+    unknown_owner_rows = []
+    if has_listing_owner_table:
+        unknown_owner_count = conn.execute(
+            text(
+                f"""
+                SELECT COUNT(*)
+                FROM amazon_listing_owner_config lo
+                LEFT JOIN amazon_store_site ss
+                  ON lo.store_site = ss.store_site
+                WHERE {unknown_owner_where}
+                """
+            )
+        ).scalar_one()
+        unknown_owner_rows = [
+            dict(row)
+            for row in conn.execute(
+                text(
+                    f"""
+                    SELECT lo.id, lo.store_site, lo.listing, lo.owner
+                    FROM amazon_listing_owner_config lo
+                    LEFT JOIN amazon_store_site ss
+                      ON lo.store_site = ss.store_site
+                    WHERE {unknown_owner_where}
+                    ORDER BY lo.id DESC
+                    LIMIT 20
+                    """
+                )
+            ).mappings()
+        ]
+
+    return [
+        {
+            "key": "unknown_product_store_site",
+            "label": "产品引用未知店铺站点",
+            "field": "store_site",
+            "count": unknown_product_count,
+            "rows": unknown_product_rows,
+        },
+        {
+            "key": "unknown_listing_owner_store_site",
+            "label": "负责人配置引用未知店铺站点",
+            "field": "store_site",
+            "count": unknown_owner_count,
+            "rows": unknown_owner_rows,
+        },
+    ]
+
+
 def _listing_owner_table_available(conn) -> bool:
     try:
         conn.execute(text("SELECT 1 FROM amazon_listing_owner_config LIMIT 1")).first()
+        return True
+    except SQLAlchemyError:
+        return False
+
+
+def _store_site_table_available(conn) -> bool:
+    try:
+        conn.execute(text("SELECT 1 FROM amazon_store_site LIMIT 1")).first()
         return True
     except SQLAlchemyError:
         return False
@@ -223,9 +334,20 @@ def _empty_field_issues() -> list[dict[str, object]]:
 
 
 def _empty_relation_issues() -> list[dict[str, object]]:
+    return _empty_listing_owner_relation_issues() + _empty_store_site_relation_issues()
+
+
+def _empty_listing_owner_relation_issues() -> list[dict[str, object]]:
     return [
         {"key": key, "label": label, "field": "listing", "count": 0, "rows": []}
-        for key, label in RELATION_RULES
+        for key, label in RELATION_RULES[:2]
+    ]
+
+
+def _empty_store_site_relation_issues() -> list[dict[str, object]]:
+    return [
+        {"key": key, "label": label, "field": "store_site", "count": 0, "rows": []}
+        for key, label in RELATION_RULES[2:]
     ]
 
 

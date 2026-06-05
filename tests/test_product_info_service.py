@@ -17,6 +17,7 @@ from app.modules.product_info.service import (
     normalize_filters,
     update_product,
 )
+from app.modules.store_site.service import UnknownStoreSiteError
 
 
 def test_normalize_filters_trims_values_and_forces_page_size():
@@ -594,6 +595,24 @@ def test_create_product_rejects_second_locked_msku_for_same_store_site_sku(monke
         conn.execute(
             text(
                 """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site)
+                VALUES (1, 'SAYOLA:US')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
                 CREATE TABLE amazon_product_info (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     store_site TEXT,
@@ -629,6 +648,42 @@ def test_create_product_rejects_second_locked_msku_for_same_store_site_sku(monke
         row_count = conn.execute(text("SELECT COUNT(*) FROM amazon_product_info")).scalar_one()
 
     assert row_count == 1
+
+
+def test_create_product_rejects_unknown_store_site(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    store_site TEXT,
+                    msku TEXT
+                )
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    with pytest.raises(UnknownStoreSiteError):
+        create_product({"store_site": "UNKNOWN:US", "msku": "MSKU-001"})
+
+    with engine.connect() as conn:
+        row_count = conn.execute(text("SELECT COUNT(*) FROM amazon_product_info")).scalar_one()
+
+    assert row_count == 0
 
 
 def test_update_product_rejects_second_locked_msku_for_same_store_site_sku(monkeypatch):

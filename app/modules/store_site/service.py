@@ -1,6 +1,7 @@
 from time import monotonic
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.db import get_engine
 from app.shared.audit import build_change_set, record_operation_log
@@ -14,6 +15,32 @@ _store_site_list_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.
 
 class DuplicateStoreSiteError(Exception):
     pass
+
+
+class UnknownStoreSiteError(Exception):
+    pass
+
+
+def store_site_exists(conn, store_site: str | None) -> bool:
+    if not store_site:
+        return False
+    try:
+        return (
+            conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM amazon_store_site
+                    WHERE store_site = :store_site
+                    LIMIT 1
+                    """
+                ),
+                {"store_site": store_site},
+            ).first()
+            is not None
+        )
+    except SQLAlchemyError:
+        return False
 
 
 def list_store_sites(q: str | None = None) -> list[dict[str, object]]:

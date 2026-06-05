@@ -104,6 +104,24 @@ def test_create_product_inserts_row_and_writes_operation_log(monkeypatch):
         conn.execute(
             text(
                 """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site)
+                VALUES (1, 'SAYOLA:US')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
                 CREATE TABLE amazon_product_info (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     asin TEXT,

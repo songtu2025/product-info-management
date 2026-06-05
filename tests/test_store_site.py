@@ -56,6 +56,13 @@ def test_store_site_new_page_renders_create_form():
     assert "name=\"domain\"" in response.text
 
 
+def test_store_site_new_page_prefills_store_site_from_query():
+    response = client.get("/store-sites/new?store_site=UNKNOWN%3AUS")
+
+    assert response.status_code == 200
+    assert 'name="store_site" value="UNKNOWN:US"' in response.text
+
+
 def test_store_site_new_page_provides_auto_fill_data(monkeypatch):
     monkeypatch.setattr(
         "app.modules.store_site.routes.list_store_sites",

@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from app.core.db import get_engine
 from app.shared.audit import build_change_set, record_operation_log
+from app.modules.store_site.service import UnknownStoreSiteError, store_site_exists
 
 
 class DuplicateProductError(Exception):
@@ -484,6 +485,8 @@ def create_product(
         ).first()
         if duplicate:
             raise DuplicateProductError
+        if not store_site_exists(conn, store_site):
+            raise UnknownStoreSiteError
         if is_locked_msku(allowed_payload.get("msku_lock_status")) and _has_locked_msku_conflict(
             conn,
             store_site=store_site,

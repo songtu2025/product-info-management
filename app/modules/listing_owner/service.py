@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.db import get_engine
 from app.shared.audit import build_change_set, record_operation_log
+from app.modules.store_site.service import UnknownStoreSiteError, store_site_exists
 
 
 EDITABLE_FIELDS = (
@@ -285,6 +286,8 @@ def create_listing_owner(
         ).first()
         if duplicate:
             raise DuplicateListingOwnerError
+        if not store_site_exists(conn, store_site):
+            raise UnknownStoreSiteError
 
         result = conn.execute(insert_sql, allowed_payload)
         row_id = result.lastrowid

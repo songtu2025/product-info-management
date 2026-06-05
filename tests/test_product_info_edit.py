@@ -6,6 +6,7 @@ from app.modules.product_info.service import (
     build_create_payload,
     build_update_payload,
 )
+from app.modules.store_site.service import UnknownStoreSiteError
 
 
 client = TestClient(app)
@@ -134,6 +135,32 @@ def test_product_new_post_shows_duplicate_product_error(monkeypatch):
     assert "该店铺站点下 MSKU 已存在" in response.text
     assert '<option value="SAYOLA:US" selected>SAYOLA:US</option>' in response.text
     assert "MSKU-001" in response.text
+
+
+def test_product_new_post_shows_unknown_store_site_error(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_store_sites",
+        lambda: [
+            {"store_site": "SAYOLA:US"},
+            {"store_site": "RIVBOS:CA"},
+        ],
+    )
+
+    def fake_create_product(payload, changed_by="system"):
+        raise UnknownStoreSiteError
+
+    monkeypatch.setattr("app.modules.product_info.routes.create_product", fake_create_product)
+
+    response = client.post(
+        "/products/new",
+        data={"store_site": "UNKNOWN:US", "msku": "MSKU-001"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "店铺站点不存在，请先维护店铺站点" in response.text
+    assert "/store-sites/new" in response.text
+    assert "UNKNOWN:US" in response.text
 
 
 def test_product_edit_post_updates_and_redirects(monkeypatch):

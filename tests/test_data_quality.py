@@ -44,6 +44,19 @@ def create_listing_owner_table(conn):
     )
 
 
+def create_store_site_table(conn):
+    conn.execute(
+        text(
+            """
+            CREATE TABLE amazon_store_site (
+                id INTEGER PRIMARY KEY,
+                store_site TEXT
+            )
+            """
+        )
+    )
+
+
 def test_get_product_quality_report_counts_missing_fields(monkeypatch):
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
@@ -78,6 +91,8 @@ def test_get_product_quality_report_counts_missing_fields(monkeypatch):
     assert [issue["key"] for issue in report["relation_issues"]] == [
         "missing_listing_owner_config",
         "orphan_listing_owner_config",
+        "unknown_product_store_site",
+        "unknown_listing_owner_store_site",
     ]
     assert [issues[key] for key in [
         "missing_asin",
@@ -135,6 +150,46 @@ def test_get_product_quality_report_counts_missing_fields(monkeypatch):
     ]
 
 
+def test_get_product_quality_report_handles_missing_listing_owner_table_with_store_sites(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        create_product_table(conn)
+        create_store_site_table(conn)
+        conn.execute(text("INSERT INTO amazon_store_site (id, store_site) VALUES (1, 'SAYOLA:US')"))
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, store_site, msku, asin, listing, brand, sales_status, product_name, updated_at
+                )
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'B001', 'L1', 'BrandA', '在售', 'Product 1', '2026-06-01'),
+                    (2, 'UNKNOWN:US', 'MSKU-002', 'B002', 'L2', 'BrandA', '在售', 'Product 2', '2026-06-02')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_quality_report_cache()
+
+    report = get_product_quality_report()
+    issues = {issue["key"]: issue for issue in report["relation_issues"]}
+
+    assert issues["missing_listing_owner_config"]["count"] == 0
+    assert issues["orphan_listing_owner_config"]["count"] == 0
+    assert issues["unknown_product_store_site"]["count"] == 1
+    assert issues["unknown_product_store_site"]["rows"] == [
+        {
+            "id": 2,
+            "store_site": "UNKNOWN:US",
+            "msku": "MSKU-002",
+            "listing": "L2",
+            "product_name": "Product 2",
+        }
+    ]
+    assert issues["unknown_listing_owner_store_site"]["count"] == 0
+
+
 def test_get_product_quality_report_counts_listing_owner_integrity(monkeypatch):
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
@@ -186,6 +241,60 @@ def test_get_product_quality_report_counts_listing_owner_integrity(monkeypatch):
     assert [issue["key"] for issue in report["relation_issues"]] == [
         "missing_listing_owner_config",
         "orphan_listing_owner_config",
+        "unknown_product_store_site",
+        "unknown_listing_owner_store_site",
+    ]
+
+
+def test_get_product_quality_report_counts_unknown_store_site_references(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        create_product_table(conn)
+        create_listing_owner_table(conn)
+        create_store_site_table(conn)
+        conn.execute(text("INSERT INTO amazon_store_site (id, store_site) VALUES (1, 'SAYOLA:US')"))
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, store_site, msku, asin, listing, brand, sales_status, product_name, updated_at
+                )
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'B001', 'L1', 'BrandA', '在售', 'Product 1', '2026-06-01'),
+                    (2, 'UNKNOWN:US', 'MSKU-002', 'B002', 'L2', 'BrandA', '在售', 'Product 2', '2026-06-02')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (id, store_site, listing, owner)
+                VALUES
+                    (1, 'SAYOLA:US', 'L1', 'Alice'),
+                    (2, 'UNKNOWN:US', 'L2', 'Bob')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_quality_report_cache()
+
+    report = get_product_quality_report()
+    issues = {issue["key"]: issue for issue in report["relation_issues"]}
+
+    assert issues["unknown_product_store_site"]["count"] == 1
+    assert issues["unknown_product_store_site"]["rows"] == [
+        {
+            "id": 2,
+            "store_site": "UNKNOWN:US",
+            "msku": "MSKU-002",
+            "listing": "L2",
+            "product_name": "Product 2",
+        }
+    ]
+    assert issues["unknown_listing_owner_store_site"]["count"] == 1
+    assert issues["unknown_listing_owner_store_site"]["rows"] == [
+        {"id": 2, "store_site": "UNKNOWN:US", "listing": "L2", "owner": "Bob"}
     ]
 
 
@@ -321,6 +430,21 @@ def test_data_quality_page_renders_report(monkeypatch):
                         }
                     ],
                 },
+                {
+                    "key": "unknown_product_store_site",
+                    "label": "产品引用未知店铺站点",
+                    "field": "store_site",
+                    "count": 1,
+                    "rows": [
+                        {
+                            "id": 4,
+                            "store_site": "UNKNOWN:US",
+                            "msku": "MSKU-004",
+                            "listing": "Listing C",
+                            "product_name": "Product 4",
+                        }
+                    ],
+                },
             ],
         },
     )
@@ -338,6 +462,8 @@ def test_data_quality_page_renders_report(monkeypatch):
     assert "缺 Listing 负责人配置" in response.text
     assert "/listing-owners/new?store_site=SAYOLA%3AUS&amp;listing=Listing%20A" in response.text
     assert "/listing-owners?q=Listing%20B" in response.text
+    assert "产品引用未知店铺站点" in response.text
+    assert "/store-sites/new?store_site=UNKNOWN%3AUS" in response.text
 
 
 def test_data_quality_export_route_downloads_workbook(monkeypatch):

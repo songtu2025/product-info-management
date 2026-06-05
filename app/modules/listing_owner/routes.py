@@ -18,19 +18,34 @@ from app.modules.listing_owner.service import (
     list_listing_owners,
     update_listing_owner,
 )
+from app.modules.store_site.service import UnknownStoreSiteError
 from app.shared.flash import set_flash
 
 
 router = APIRouter(prefix="/listing-owners")
 
 
-def build_listing_owner_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
+def build_listing_owner_new_context(
+    row: dict[str, object] | None = None,
+    error: str | None = None,
+    error_action_url: str | None = None,
+    error_action_label: str | None = None,
+) -> dict[str, object]:
+    row = row or {}
+    options = get_filter_options()
+    selected_store_site = row.get("store_site")
+    store_sites = list(options.get("store_sites", []))
+    if selected_store_site and selected_store_site not in store_sites:
+        options = {**options, "store_sites": [selected_store_site, *store_sites]}
+
     return {
         "app_name": get_settings().app_name,
         "active_nav": "Listing 负责人",
-        "row": row or {},
+        "row": row,
         "error": error,
-        "options": get_filter_options(),
+        "error_action_url": error_action_url,
+        "error_action_label": error_action_label,
+        "options": options,
     }
 
 
@@ -153,6 +168,18 @@ async def listing_owner_create(request: Request):
             request,
             "listing_owner/new.html",
             build_listing_owner_new_context(payload, "负责人配置已存在，请检查店铺站点和 Listing。"),
+            status_code=400,
+        )
+    except UnknownStoreSiteError:
+        return templates.TemplateResponse(
+            request,
+            "listing_owner/new.html",
+            build_listing_owner_new_context(
+                payload,
+                "店铺站点不存在，请先维护店铺站点。",
+                "/store-sites/new",
+                "新增店铺站点",
+            ),
             status_code=400,
         )
 

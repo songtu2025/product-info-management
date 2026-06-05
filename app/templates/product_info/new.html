@@ -15,7 +15,12 @@
   </div>
 
   {% if error %}
-    <div class="form-alert">{{ error }}</div>
+    <div class="form-alert">
+      {{ error }}
+      {% if error_action_url and error_action_label %}
+        <a class="action-link ml-2" href="{{ error_action_url }}">{{ error_action_label }}</a>
+      {% endif %}
+    </div>
   {% endif %}
 
   <form class="content-panel" method="post">
