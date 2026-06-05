@@ -311,6 +311,33 @@ def test_product_list_passes_search_and_filter_params(monkeypatch):
     assert captured["filters"].page_size == 20
 
 
+def test_product_list_renders_clear_filter_link(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_products",
+        lambda filters: {"rows": [], "total": 0, "page": 1, "page_size": 20, "pages": 0},
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {
+            "store_sites": [],
+            "brands": [],
+            "sales_statuses": [],
+            "listings": [],
+            "listing_owners": [],
+            "listing_owner_statuses": [],
+            "project_groups": [],
+        },
+    )
+
+    response = client.get("/?q=abc&brand=BrandA&listing=ListingA&page=2")
+
+    assert response.status_code == 200
+    assert "清空筛选" in response.text
+    assert 'data-clear-product-filters' in response.text
+    assert 'href="/"' in response.text
+    assert 'data-clear-product-filters href="/?"' not in response.text
+
+
 def test_product_list_passes_page_size_and_keeps_it_in_pagination(monkeypatch):
     captured = {}
 
