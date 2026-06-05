@@ -11,6 +11,7 @@ from app.modules.admin_user.service import (
     reset_admin_user_password,
     update_admin_user,
 )
+from app.shared.flash import set_flash
 
 
 router = APIRouter(prefix="/admin-users")
@@ -57,6 +58,7 @@ async def admin_user_create(request: Request):
         "is_active": 1 if form.get("is_active") else 0,
     }
     if create_admin_user(payload, changed_by=user.username):
+        set_flash(request, "用户已新增。")
         return RedirectResponse("/admin-users", status_code=303)
 
     return templates.TemplateResponse(
@@ -104,6 +106,7 @@ async def admin_user_update(request: Request, user_id: int):
         "is_active": 1 if form.get("is_active") else 0,
     }
     if update_admin_user(user_id, payload, changed_by=user.username):
+        set_flash(request, "用户已保存。")
         return RedirectResponse("/admin-users", status_code=303)
 
     row.update(payload)
@@ -149,6 +152,7 @@ async def admin_user_reset_password_update(request: Request, user_id: int):
     form = await request.form()
     password = str(form.get("password") or "").strip()
     if reset_admin_user_password(user_id, password, changed_by=user.username):
+        set_flash(request, "密码已重置。")
         return RedirectResponse("/admin-users", status_code=303)
 
     return templates.TemplateResponse(

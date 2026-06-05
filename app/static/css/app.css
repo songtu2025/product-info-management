@@ -827,6 +827,17 @@ textarea {
   font-weight: 700;
 }
 
+.flash-message {
+  margin-bottom: 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  padding: 12px 14px;
+  color: #1e40af;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .form-section {
   border-top: 1px solid var(--border-subtle);
 }

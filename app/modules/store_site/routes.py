@@ -13,6 +13,7 @@ from app.modules.store_site.service import (
     list_store_sites,
     update_store_site,
 )
+from app.shared.flash import set_flash
 
 
 router = APIRouter(prefix="/store-sites")
@@ -75,6 +76,7 @@ async def store_site_create(request: Request):
         )
 
     if store_site_id:
+        set_flash(request, "店铺站点已新增。")
         return RedirectResponse("/store-sites", status_code=303)
 
     return templates.TemplateResponse(
@@ -114,6 +116,7 @@ async def store_site_update(request: Request, store_site_id: int):
     form = await request.form()
     payload = build_update_payload(dict(form))
     if update_store_site(store_site_id, payload, changed_by=user.username):
+        set_flash(request, "店铺站点已保存。")
         return RedirectResponse("/store-sites", status_code=303)
 
     row.update(payload)

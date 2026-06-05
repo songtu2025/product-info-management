@@ -18,6 +18,7 @@ from app.modules.listing_owner.service import (
     list_listing_owners,
     update_listing_owner,
 )
+from app.shared.flash import set_flash
 
 
 router = APIRouter(prefix="/listing-owners")
@@ -156,6 +157,7 @@ async def listing_owner_create(request: Request):
         )
 
     if row_id:
+        set_flash(request, "Listing 负责人已新增。")
         return RedirectResponse("/listing-owners", status_code=303)
 
     return templates.TemplateResponse(
@@ -195,6 +197,7 @@ async def listing_owner_update(request: Request, row_id: int):
     form = await request.form()
     payload = build_update_payload(dict(form))
     if update_listing_owner(row_id, payload, changed_by=user.username):
+        set_flash(request, "Listing 负责人已保存。")
         return RedirectResponse("/listing-owners", status_code=303)
 
     row.update(payload)

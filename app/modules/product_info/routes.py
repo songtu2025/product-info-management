@@ -24,6 +24,7 @@ from app.modules.product_info.service import (
     update_product,
 )
 from app.modules.store_site.service import list_store_sites
+from app.shared.flash import set_flash
 from app.shared.user_preference import get_user_preference, save_user_preference
 
 
@@ -259,6 +260,7 @@ async def product_create(request: Request):
         )
 
     if product_id:
+        set_flash(request, "产品信息已新增。")
         return RedirectResponse(f"/products/{product_id}", status_code=303)
 
     return templates.TemplateResponse(
@@ -334,6 +336,7 @@ async def product_update(request: Request, product_id: int):
         )
 
     if updated:
+        set_flash(request, "产品信息已保存。")
         return RedirectResponse(f"/products/{product_id}", status_code=303)
 
     detail["product"].update(payload)
