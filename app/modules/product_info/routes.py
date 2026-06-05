@@ -51,6 +51,9 @@ def product_list(
     brand: str | None = None,
     sales_status: str | None = None,
     listing: str | None = None,
+    listing_owner: str | None = None,
+    listing_owner_status: str | None = None,
+    project_group: str | None = None,
     page: int = 1,
     page_size: int = 50,
 ):
@@ -60,6 +63,9 @@ def product_list(
         brand=brand,
         sales_status=sales_status,
         listing=listing,
+        listing_owner=listing_owner,
+        listing_owner_status=listing_owner_status,
+        project_group=project_group,
         page=page,
         page_size=page_size,
     )
@@ -71,6 +77,9 @@ def product_list(
         brand=filters.brand,
         sales_status=filters.sales_status,
         listing=filters.listing,
+        listing_owner=filters.listing_owner,
+        listing_owner_status=filters.listing_owner_status,
+        project_group=filters.project_group,
         page=int(products["page"]),
         page_size=int(products["page_size"]),
     )
@@ -140,6 +149,9 @@ def product_export(
     brand: str | None = None,
     sales_status: str | None = None,
     listing: str | None = None,
+    listing_owner: str | None = None,
+    listing_owner_status: str | None = None,
+    project_group: str | None = None,
     export_fields: list[str] | None = Query(None),
 ):
     filters = ProductFilters(
@@ -148,6 +160,9 @@ def product_export(
         brand=brand,
         sales_status=sales_status,
         listing=listing,
+        listing_owner=listing_owner,
+        listing_owner_status=listing_owner_status,
+        project_group=project_group,
         page=1,
     )
     content = (
@@ -198,6 +213,9 @@ def _build_list_url(filters: ProductFilters, page: int) -> str:
         "brand": filters.brand,
         "sales_status": filters.sales_status,
         "listing": filters.listing,
+        "listing_owner": filters.listing_owner,
+        "listing_owner_status": filters.listing_owner_status,
+        "project_group": filters.project_group,
         "page_size": filters.page_size,
         "page": page,
     }

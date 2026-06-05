@@ -9,6 +9,9 @@
         <p class="mt-1 text-sm text-slate-500">按店铺站点、Listing、负责人、状态、维护人或项目组搜索。</p>
       </div>
       <div class="flex gap-2">
+        {% if can_edit %}
+        <a class="btn-secondary" href="/listing-owners/new">新增 Listing 负责人</a>
+        {% endif %}
         <button class="btn-primary" type="submit">查询</button>
         <a class="btn-secondary" href="/listing-owners">重置</a>
       </div>

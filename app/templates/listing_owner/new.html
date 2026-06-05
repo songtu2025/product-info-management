@@ -1,0 +1,107 @@
+{% extends "layout.html" %}
+
+{% macro value(text) -%}
+  {{ text if text not in [None, ""] else "" }}
+{%- endmacro %}
+
+{% block content %}
+  <div class="form-shell">
+  <div class="form-page-header">
+    <div>
+      <a class="detail-back-link" href="/listing-owners">返回 Listing 负责人</a>
+      <h2 class="form-title">新增 Listing 负责人</h2>
+      <p class="form-subtitle">新增一条 `store_site + listing` 负责人配置，保存后可在产品信息列表和详情中关联展示。</p>
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="form-alert">{{ error }}</div>
+  {% endif %}
+
+  <form class="content-panel" method="post">
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">关联键</h3>
+        <p class="form-section-subtitle">`store_site + listing` 必填且唯一，用于定位一条负责人配置。</p>
+      </div>
+
+      <div class="form-grid form-grid-2">
+        <label class="field">
+          <span class="field-label">店铺站点 <span class="required-mark">*</span></span>
+          <select class="field-input mono" name="store_site" required>
+            <option value="">请选择</option>
+            {% for option in options.store_sites %}
+              <option value="{{ option }}" {% if row.store_site == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">Listing <span class="required-mark">*</span></span>
+          <input class="field-input mono" name="listing" value="{{ value(row.listing) }}" required>
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">负责人维护</h3>
+        <p class="form-section-subtitle">维护负责人、Listing 状态和日常维护人。</p>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span class="field-label">负责人</span>
+          <input class="field-input" name="owner" value="{{ value(row.owner) }}" list="listing-owner-options">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing 状态</span>
+          <input class="field-input" name="listing_status" value="{{ value(row.listing_status) }}" list="listing-status-options">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing 维护人</span>
+          <input class="field-input" name="listing_maintainer" value="{{ value(row.listing_maintainer) }}" list="listing-maintainer-options">
+        </label>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">考核与项目组</h3>
+        <p class="form-section-subtitle">维护库龄考核归属和项目组信息。</p>
+      </div>
+
+      <div class="form-grid form-grid-2">
+        <label class="field">
+          <span class="field-label">是否纳入库龄考核</span>
+          <input class="field-input" name="include_inventory_age_assessment" value="{{ value(row.include_inventory_age_assessment) }}" list="inventory-age-options">
+        </label>
+        <label class="field">
+          <span class="field-label">项目组</span>
+          <input class="field-input" name="project_group" value="{{ value(row.project_group) }}" list="project-group-options">
+        </label>
+      </div>
+    </section>
+
+    <datalist id="listing-owner-options">
+      {% for option in options.owners %}<option value="{{ option }}"></option>{% endfor %}
+    </datalist>
+    <datalist id="listing-status-options">
+      {% for option in options.listing_statuses %}<option value="{{ option }}"></option>{% endfor %}
+    </datalist>
+    <datalist id="listing-maintainer-options">
+      {% for option in options.listing_maintainers %}<option value="{{ option }}"></option>{% endfor %}
+    </datalist>
+    <datalist id="inventory-age-options">
+      {% for option in options.inventory_age_assessments %}<option value="{{ option }}"></option>{% endfor %}
+    </datalist>
+    <datalist id="project-group-options">
+      {% for option in options.project_groups %}<option value="{{ option }}"></option>{% endfor %}
+    </datalist>
+
+    <div class="form-actions">
+      <a class="btn-secondary" href="/listing-owners">取消</a>
+      <button class="btn-primary" type="submit">保存</button>
+    </div>
+  </form>
+  </div>
+{% endblock %}

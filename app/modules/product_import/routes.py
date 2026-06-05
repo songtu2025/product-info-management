@@ -34,7 +34,8 @@ def product_import_page(request: Request):
 
 
 @router.get("/products/import/template")
-def product_import_template():
+def product_import_template(request: Request):
+    require_admin(request)
     content = build_product_import_template()
     return Response(
         content,

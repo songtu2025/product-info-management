@@ -5,7 +5,16 @@ from sqlalchemy import create_engine, text
 
 from app.main import app
 from app.modules.listing_owner import service
-from app.modules.listing_owner.service import ListingOwnerFilters, build_update_payload, update_listing_owner
+import pytest
+
+from app.modules.listing_owner.service import (
+    DuplicateListingOwnerError,
+    ListingOwnerFilters,
+    build_create_payload,
+    build_update_payload,
+    create_listing_owner,
+    update_listing_owner,
+)
 
 
 client = TestClient(app)
@@ -63,6 +72,7 @@ def test_listing_owner_list_renders_rows(monkeypatch):
     assert "/listing-owners/1/edit" in response.text
     assert "日志" in response.text
     assert "/operation-logs?table_name=amazon_listing_owner_config&amp;record_id=1" in response.text
+    assert "/listing-owners/new" in response.text
 
 
 def test_listing_owner_list_passes_structured_filters_and_renders_options(monkeypatch):
@@ -371,6 +381,104 @@ def test_listing_owner_edit_post_updates_and_redirects(monkeypatch):
     assert captured["changed_by"] == "test-admin"
 
 
+def test_listing_owner_new_page_renders_create_form(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.get_filter_options",
+        lambda: {
+            "store_sites": ["SAYOLA:US"],
+            "owners": ["张三"],
+            "listing_statuses": ["正常"],
+            "listing_maintainers": ["李四"],
+            "inventory_age_assessments": ["是"],
+            "project_groups": ["项目组A"],
+        },
+    )
+
+    response = client.get("/listing-owners/new")
+
+    assert response.status_code == 200
+    assert "新增 Listing 负责人" in response.text
+    assert 'name="store_site"' in response.text
+    assert 'option value="SAYOLA:US"' in response.text
+    assert 'name="listing"' in response.text
+    assert 'name="owner"' in response.text
+
+
+def test_listing_owner_new_post_creates_and_redirects(monkeypatch):
+    captured = {}
+
+    def fake_create_listing_owner(payload, changed_by="system"):
+        captured["payload"] = payload
+        captured["changed_by"] = changed_by
+        return 9
+
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.create_listing_owner",
+        fake_create_listing_owner,
+    )
+
+    response = client.post(
+        "/listing-owners/new",
+        data={
+            "store_site": " SAYOLA:US ",
+            "listing": " RB833 ",
+            "owner": " 张三 ",
+            "listing_status": "正常",
+            "listing_maintainer": "",
+            "include_inventory_age_assessment": "是",
+            "project_group": " 项目组A ",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/listing-owners"
+    assert captured == {
+        "payload": {
+            "store_site": "SAYOLA:US",
+            "listing": "RB833",
+            "owner": "张三",
+            "listing_status": "正常",
+            "listing_maintainer": None,
+            "include_inventory_age_assessment": "是",
+            "project_group": "项目组A",
+        },
+        "changed_by": "test-admin",
+    }
+
+
+def test_listing_owner_new_post_shows_duplicate_error(monkeypatch):
+    def fake_create_listing_owner(payload, changed_by="system"):
+        raise DuplicateListingOwnerError
+
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.create_listing_owner",
+        fake_create_listing_owner,
+    )
+    monkeypatch.setattr(
+        "app.modules.listing_owner.routes.get_filter_options",
+        lambda: {
+            "store_sites": ["SAYOLA:US"],
+            "owners": [],
+            "listing_statuses": [],
+            "listing_maintainers": [],
+            "inventory_age_assessments": [],
+            "project_groups": [],
+        },
+    )
+
+    response = client.post(
+        "/listing-owners/new",
+        data={"store_site": "SAYOLA:US", "listing": "RB833"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "负责人配置已存在" in response.text
+    assert "SAYOLA:US" in response.text
+    assert "RB833" in response.text
+
+
 def test_build_listing_owner_update_payload_keeps_only_editable_fields():
     payload = build_update_payload(
         {
@@ -391,6 +499,161 @@ def test_build_listing_owner_update_payload_keeps_only_editable_fields():
         "include_inventory_age_assessment": "否",
         "project_group": "项目组B",
     }
+
+
+def test_build_listing_owner_create_payload_keeps_create_fields():
+    payload = build_create_payload(
+        {
+            "store_site": " SAYOLA:US ",
+            "listing": " RB833 ",
+            "owner": " 张三 ",
+            "listing_status": "",
+            "listing_maintainer": "李四",
+            "include_inventory_age_assessment": " 是 ",
+            "project_group": "项目组A",
+            "not_allowed": "ignored",
+        }
+    )
+
+    assert payload == {
+        "store_site": "SAYOLA:US",
+        "listing": "RB833",
+        "owner": "张三",
+        "listing_status": None,
+        "listing_maintainer": "李四",
+        "include_inventory_age_assessment": "是",
+        "project_group": "项目组A",
+    }
+
+
+def test_create_listing_owner_writes_operation_log(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    store_site TEXT NOT NULL,
+                    listing TEXT NOT NULL,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_operation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    changed_by TEXT NOT NULL,
+                    change_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    row_id = create_listing_owner(
+        {
+            "store_site": "SAYOLA:US",
+            "listing": "RB833",
+            "owner": "张三",
+            "listing_status": "正常",
+            "listing_maintainer": None,
+            "include_inventory_age_assessment": "是",
+            "project_group": "项目组A",
+        },
+        changed_by="admin",
+    )
+
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT * FROM amazon_listing_owner_config")).mappings().one()
+        log = conn.execute(text("SELECT * FROM amazon_operation_log")).mappings().one()
+
+    assert row_id == 1
+    assert row["store_site"] == "SAYOLA:US"
+    assert row["listing"] == "RB833"
+    assert log["table_name"] == "amazon_listing_owner_config"
+    assert log["record_id"] == 1
+    assert log["operation_type"] == "INSERT"
+    assert log["changed_by"] == "admin"
+    assert json.loads(log["change_data"]) == {
+        "store_site": {"old": None, "new": "SAYOLA:US"},
+        "listing": {"old": None, "new": "RB833"},
+        "owner": {"old": None, "new": "张三"},
+        "listing_status": {"old": None, "new": "正常"},
+        "include_inventory_age_assessment": {"old": None, "new": "是"},
+        "project_group": {"old": None, "new": "项目组A"},
+    }
+
+
+def test_create_listing_owner_rejects_duplicate_without_log(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    store_site TEXT NOT NULL,
+                    listing TEXT NOT NULL,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_operation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_name TEXT NOT NULL,
+                    record_id INTEGER NOT NULL,
+                    operation_type TEXT NOT NULL,
+                    changed_by TEXT NOT NULL,
+                    change_data TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (store_site, listing, owner)
+                VALUES ('SAYOLA:US', 'RB833', '张三')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    with pytest.raises(DuplicateListingOwnerError):
+        create_listing_owner(
+            {"store_site": "SAYOLA:US", "listing": "RB833", "owner": "王五"},
+            changed_by="admin",
+        )
+
+    with engine.connect() as conn:
+        row_count = conn.execute(text("SELECT COUNT(*) FROM amazon_listing_owner_config")).scalar_one()
+        log_count = conn.execute(text("SELECT COUNT(*) FROM amazon_operation_log")).scalar_one()
+
+    assert row_count == 1
+    assert log_count == 0
 
 
 def test_update_listing_owner_writes_operation_log(monkeypatch):

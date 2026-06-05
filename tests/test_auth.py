@@ -113,6 +113,34 @@ def test_viewer_cannot_use_admin_import_page(monkeypatch):
     assert response.status_code == 403
 
 
+def test_viewer_cannot_use_admin_import_actions(monkeypatch):
+    setup_auth_db(monkeypatch)
+    app.state.disable_auth = False
+    client.cookies.clear()
+
+    client.post(
+        "/login",
+        data={"username": "viewer", "password": "viewer-pass"},
+        follow_redirects=False,
+    )
+
+    template_response = client.get("/products/import/template", follow_redirects=False)
+    preview_response = client.post(
+        "/products/import/preview",
+        files={"file": ("products.xlsx", b"not-xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        follow_redirects=False,
+    )
+    commit_response = client.post(
+        "/products/import/commit",
+        data={"import_token": "token-1"},
+        follow_redirects=False,
+    )
+
+    assert template_response.status_code == 403
+    assert preview_response.status_code == 403
+    assert commit_response.status_code == 403
+
+
 def test_viewer_cannot_use_admin_user_page(monkeypatch):
     setup_auth_db(monkeypatch)
     app.state.disable_auth = False
@@ -126,6 +154,62 @@ def test_viewer_cannot_use_admin_user_page(monkeypatch):
     response = client.get("/admin-users", follow_redirects=False)
 
     assert response.status_code == 403
+
+
+def test_viewer_cannot_access_write_pages_directly(monkeypatch):
+    setup_auth_db(monkeypatch)
+    app.state.disable_auth = False
+    client.cookies.clear()
+
+    client.post(
+        "/login",
+        data={"username": "viewer", "password": "viewer-pass"},
+        follow_redirects=False,
+    )
+
+    paths = [
+        "/products/new",
+        "/products/1/edit",
+        "/store-sites/new",
+        "/store-sites/1/edit",
+        "/listing-owners/new",
+        "/listing-owners/1/edit",
+        "/admin-users/new",
+        "/admin-users/1/edit",
+        "/admin-users/1/reset-password",
+    ]
+
+    for path in paths:
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 403, path
+
+
+def test_viewer_cannot_post_write_actions_directly(monkeypatch):
+    setup_auth_db(monkeypatch)
+    app.state.disable_auth = False
+    client.cookies.clear()
+
+    client.post(
+        "/login",
+        data={"username": "viewer", "password": "viewer-pass"},
+        follow_redirects=False,
+    )
+
+    requests = [
+        ("/products/new", {"store_site": "SAYOLA:US", "msku": "MSKU-1"}),
+        ("/products/1/edit", {"product_name": "changed"}),
+        ("/store-sites/new", {"store_site": "SAYOLA:US"}),
+        ("/store-sites/1/edit", {"store": "changed"}),
+        ("/listing-owners/new", {"store_site": "SAYOLA:US", "listing": "RB833"}),
+        ("/listing-owners/1/edit", {"owner": "changed"}),
+        ("/admin-users/new", {"username": "new", "password": "pass", "role": "viewer"}),
+        ("/admin-users/1/edit", {"role": "viewer"}),
+        ("/admin-users/1/reset-password", {"password": "new-pass"}),
+    ]
+
+    for path, data in requests:
+        response = client.post(path, data=data, follow_redirects=False)
+        assert response.status_code == 403, path
 
 
 def test_viewer_can_export_products(monkeypatch):

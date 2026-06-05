@@ -62,6 +62,36 @@
       </label>
 
       <label class="field">
+        <span class="field-label">Listing 负责人</span>
+        <select class="field-input" name="listing_owner">
+          <option value="">全部</option>
+          {% for value in options.listing_owners %}
+            <option value="{{ value }}" {% if filters.listing_owner == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Listing 状态</span>
+        <select class="field-input" name="listing_owner_status">
+          <option value="">全部</option>
+          {% for value in options.listing_owner_statuses %}
+            <option value="{{ value }}" {% if filters.listing_owner_status == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">项目组</span>
+        <select class="field-input" name="project_group">
+          <option value="">全部</option>
+          {% for value in options.project_groups %}
+            <option value="{{ value }}" {% if filters.project_group == value %}selected{% endif %}>{{ value }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
         <span class="field-label">每页行数</span>
         <select class="field-input" name="page_size">
           {% for size in product_page_sizes %}
@@ -265,6 +295,9 @@
         <input name="brand" type="hidden" value="{{ filters.brand or '' }}">
         <input name="sales_status" type="hidden" value="{{ filters.sales_status or '' }}">
         <input name="listing" type="hidden" value="{{ filters.listing or '' }}">
+        <input name="listing_owner" type="hidden" value="{{ filters.listing_owner or '' }}">
+        <input name="listing_owner_status" type="hidden" value="{{ filters.listing_owner_status or '' }}">
+        <input name="project_group" type="hidden" value="{{ filters.project_group or '' }}">
         <input name="page_size" type="hidden" value="{{ products.page_size }}">
         <span class="text-slate-500">第 {{ products.page }} / {{ products.pages if products.pages else 1 }} 页</span>
         <input

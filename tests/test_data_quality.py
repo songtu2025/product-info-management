@@ -134,3 +134,44 @@ def test_data_quality_page_renders_report(monkeypatch):
     assert "缺 ASIN" in response.text
     assert "MSKU-001" in response.text
     assert "/products/1" in response.text
+
+
+def test_data_quality_page_uses_workbench_layout(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.data_quality.routes.get_product_quality_report",
+        lambda: {
+            "total": 3,
+            "issues": [
+                {
+                    "key": "missing_asin",
+                    "label": "缺 ASIN",
+                    "field": "asin",
+                    "count": 2,
+                    "rows": [
+                        {
+                            "id": 1,
+                            "store_site": "SAYOLA:US",
+                            "msku": "MSKU-001",
+                            "product_name": "Product 1",
+                        }
+                    ],
+                },
+                {
+                    "key": "missing_listing",
+                    "label": "缺 Listing",
+                    "field": "listing",
+                    "count": 0,
+                    "rows": [],
+                },
+            ],
+        },
+    )
+
+    response = client.get("/data-quality")
+
+    assert response.status_code == 200
+    assert 'class="quality-workbench"' in response.text
+    assert "检查项概览" in response.text
+    assert "问题明细" in response.text
+    assert "优先处理" in response.text
+    assert "已通过" in response.text

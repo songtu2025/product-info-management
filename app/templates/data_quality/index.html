@@ -5,6 +5,7 @@
 {%- endmacro %}
 
 {% block content %}
+  <div class="quality-workbench">
   {% set ns = namespace(issue_total=0) %}
   {% for issue in report.issues %}
     {% set ns.issue_total = ns.issue_total + issue.count %}
@@ -30,18 +31,33 @@
     </div>
   </section>
 
-  <div class="quality-metrics">
+  <section class="quality-overview">
+    <div class="quality-block-heading">
+      <div>
+        <h3 class="quality-block-title">检查项概览</h3>
+        <p class="quality-block-copy">先看有问题的字段，再进入下方明细定位具体产品。</p>
+      </div>
+    </div>
+    <div class="quality-metrics">
     {% for issue in report.issues %}
       <section class="quality-card{% if issue.count == 0 %} quality-card-clean{% endif %}">
         <div class="quality-card-label">{{ issue.label }}</div>
         <div class="quality-card-row">
           <strong class="quality-card-count">{{ issue.count }}</strong>
           <span class="status-badge{% if issue.count == 0 %} status-badge-muted{% endif %}">
-            {{ "正常" if issue.count == 0 else "需处理" }}
+            {{ "已通过" if issue.count == 0 else "优先处理" }}
           </span>
         </div>
       </section>
     {% endfor %}
+    </div>
+  </section>
+
+  <div class="quality-block-heading quality-detail-heading">
+    <div>
+      <h3 class="quality-block-title">问题明细</h3>
+      <p class="quality-block-copy">每类问题显示前 20 条，点击详情进入产品档案核对。</p>
+    </div>
   </div>
 
   <div class="quality-sections">
@@ -86,5 +102,6 @@
         </div>
       </section>
     {% endfor %}
+  </div>
   </div>
 {% endblock %}

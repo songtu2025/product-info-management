@@ -173,6 +173,9 @@ def test_product_list_passes_search_and_filter_params(monkeypatch):
             "brand": "BrandA",
             "sales_status": "在售",
             "listing": "ListingA",
+            "listing_owner": "OwnerA",
+            "listing_owner_status": "Active",
+            "project_group": "GroupA",
             "page": "2",
         },
     )
@@ -183,6 +186,9 @@ def test_product_list_passes_search_and_filter_params(monkeypatch):
     assert captured["filters"].brand == "BrandA"
     assert captured["filters"].sales_status == "在售"
     assert captured["filters"].listing == "ListingA"
+    assert captured["filters"].listing_owner == "OwnerA"
+    assert captured["filters"].listing_owner_status == "Active"
+    assert captured["filters"].project_group == "GroupA"
     assert captured["filters"].page == 2
     assert captured["filters"].page_size == 50
 
@@ -352,6 +358,9 @@ def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
             "brand": "BrandA",
             "sales_status": "在售",
             "listing": "ListingA",
+            "listing_owner": "OwnerA",
+            "listing_owner_status": "Active",
+            "project_group": "GroupA",
             "page": "4",
             "export_fields": ["msku", "storage_type"],
         },
@@ -368,5 +377,8 @@ def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
     assert captured["filters"].brand == "BrandA"
     assert captured["filters"].sales_status == "在售"
     assert captured["filters"].listing == "ListingA"
+    assert captured["filters"].listing_owner == "OwnerA"
+    assert captured["filters"].listing_owner_status == "Active"
+    assert captured["filters"].project_group == "GroupA"
     assert captured["filters"].page == 1
     assert captured["export_fields"] == ["msku", "storage_type"]

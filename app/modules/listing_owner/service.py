@@ -14,8 +14,13 @@ EDITABLE_FIELDS = (
     "include_inventory_age_assessment",
     "project_group",
 )
+CREATE_FIELDS = ("store_site", "listing", *EDITABLE_FIELDS)
 
 LISTING_OWNER_PAGE_SIZES = (50, 100, 200)
+
+
+class DuplicateListingOwnerError(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -163,6 +168,76 @@ def build_update_payload(form_data: dict[str, str]) -> dict[str, str | None]:
         value = form_data[field].strip()
         payload[field] = value or None
     return payload
+
+
+def build_create_payload(form_data: dict[str, str]) -> dict[str, str | None]:
+    payload: dict[str, str | None] = {}
+    for field in CREATE_FIELDS:
+        if field not in form_data:
+            continue
+        value = form_data[field].strip()
+        payload[field] = value or None
+    return payload
+
+
+def create_listing_owner(
+    payload: dict[str, str | None],
+    changed_by: str = "system",
+) -> int | None:
+    store_site = payload.get("store_site")
+    listing = payload.get("listing")
+    if not store_site or not listing:
+        return None
+
+    engine = get_engine()
+    if engine is None:
+        return None
+
+    allowed_payload = {key: value for key, value in payload.items() if key in CREATE_FIELDS}
+    duplicate_sql = text(
+        """
+        SELECT id
+        FROM amazon_listing_owner_config
+        WHERE store_site = :store_site AND listing = :listing
+        LIMIT 1
+        """
+    )
+    insert_sql = text(
+        f"""
+        INSERT INTO amazon_listing_owner_config (
+            {", ".join(allowed_payload)}
+        )
+        VALUES (
+            {", ".join(f":{field}" for field in allowed_payload)}
+        )
+        """
+    )
+
+    with engine.begin() as conn:
+        duplicate = conn.execute(
+            duplicate_sql,
+            {"store_site": store_site, "listing": listing},
+        ).first()
+        if duplicate:
+            raise DuplicateListingOwnerError
+
+        result = conn.execute(insert_sql, allowed_payload)
+        row_id = result.lastrowid
+        change_data = {
+            field: {"old": None, "new": value}
+            for field, value in allowed_payload.items()
+            if value is not None
+        }
+        record_operation_log(
+            conn,
+            table_name="amazon_listing_owner_config",
+            record_id=row_id,
+            operation_type="INSERT",
+            change_data=change_data,
+            changed_by=changed_by,
+        )
+
+    return row_id
 
 
 def update_listing_owner(

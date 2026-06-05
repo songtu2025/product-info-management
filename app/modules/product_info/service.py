@@ -28,6 +28,9 @@ class ProductFilters:
     brand: str | None = None
     sales_status: str | None = None
     listing: str | None = None
+    listing_owner: str | None = None
+    listing_owner_status: str | None = None
+    project_group: str | None = None
     page: int = 1
     page_size: int = 50
 
@@ -48,6 +51,11 @@ PRODUCT_LIST_COLUMNS = (
     {"key": "category_a", "label": "品类 A", "default_visible": False},
     {"key": "category_b", "label": "品类 B", "default_visible": False},
     {"key": "listing", "label": "Listing", "default_visible": True},
+    {"key": "listing_owner", "label": "Listing 负责人", "default_visible": True},
+    {"key": "listing_owner_status", "label": "Listing 状态", "default_visible": True},
+    {"key": "listing_maintainer", "label": "Listing 维护人", "default_visible": False},
+    {"key": "include_inventory_age_assessment", "label": "纳入库龄考核", "default_visible": False},
+    {"key": "project_group", "label": "项目组", "default_visible": True},
     {"key": "label_name", "label": "标签名", "default_visible": False},
     {"key": "msku_shipping_remark", "label": "MSKU 发货备注", "default_visible": False},
     {"key": "transfer_remark", "label": "借调备注", "default_visible": False},
@@ -66,13 +74,48 @@ EXPORT_COLUMNS = (
     ("sku", "SKU"),
     ("brand", "品牌"),
     ("listing", "Listing"),
+    ("listing_owner", "Listing 负责人"),
+    ("listing_owner_status", "Listing 状态"),
+    ("listing_maintainer", "Listing 维护人"),
+    ("include_inventory_age_assessment", "纳入库龄考核"),
+    ("project_group", "项目组"),
     ("sales_status", "销售状态"),
     ("updated_at", "更新时间"),
 )
 
 DEFAULT_EXPORT_FIELDS = tuple(field for field, _ in EXPORT_COLUMNS)
 EXPORT_COLUMN_MAP = {column["key"]: column["label"] for column in PRODUCT_LIST_COLUMNS}
-LIST_COLUMNS = ",\n    ".join(column["key"] for column in PRODUCT_LIST_COLUMNS)
+PRODUCT_TABLE_ALIAS = "p"
+PRODUCT_OWNER_JOIN_SQL = """
+FROM amazon_product_info p
+LEFT JOIN amazon_listing_owner_config lo
+  ON p.store_site = lo.store_site
+ AND p.listing = lo.listing
+"""
+PRODUCT_COLUMN_EXPRESSIONS = {
+    column["key"]: f"{PRODUCT_TABLE_ALIAS}.{column['key']} AS {column['key']}"
+    for column in PRODUCT_LIST_COLUMNS
+    if column["key"]
+    not in {
+        "listing_owner",
+        "listing_owner_status",
+        "listing_maintainer",
+        "include_inventory_age_assessment",
+        "project_group",
+    }
+}
+PRODUCT_COLUMN_EXPRESSIONS.update(
+    {
+        "listing_owner": "lo.owner AS listing_owner",
+        "listing_owner_status": "lo.listing_status AS listing_owner_status",
+        "listing_maintainer": "lo.listing_maintainer AS listing_maintainer",
+        "include_inventory_age_assessment": (
+            "lo.include_inventory_age_assessment AS include_inventory_age_assessment"
+        ),
+        "project_group": "lo.project_group AS project_group",
+    }
+)
+LIST_COLUMNS = ",\n    ".join(PRODUCT_COLUMN_EXPRESSIONS[column["key"]] for column in PRODUCT_LIST_COLUMNS)
 
 EDITABLE_FIELDS = (
     "product_name",
@@ -118,6 +161,9 @@ def normalize_filters(filters: ProductFilters) -> ProductFilters:
         brand=_clean(filters.brand),
         sales_status=_clean(filters.sales_status),
         listing=_clean(filters.listing),
+        listing_owner=_clean(filters.listing_owner),
+        listing_owner_status=_clean(filters.listing_owner_status),
+        project_group=_clean(filters.project_group),
         page=max(filters.page, 1),
         page_size=page_size,
     )
@@ -133,13 +179,13 @@ def list_products(filters: ProductFilters) -> dict[str, object]:
     offset = (filters.page - 1) * filters.page_size
     params.update({"limit": filters.page_size, "offset": offset})
 
-    count_sql = text(f"SELECT COUNT(*) FROM amazon_product_info {where_sql}")
+    count_sql = text(f"SELECT COUNT(*) {PRODUCT_OWNER_JOIN_SQL} {where_sql}")
     list_sql = text(
         f"""
         SELECT {LIST_COLUMNS}
-        FROM amazon_product_info
+        {PRODUCT_OWNER_JOIN_SQL}
         {where_sql}
-        ORDER BY updated_at DESC, id DESC
+        ORDER BY p.updated_at DESC, p.id DESC
         LIMIT :limit OFFSET :offset
         """
     )
@@ -168,14 +214,14 @@ def list_products_for_export(
         return []
 
     export_columns = resolve_export_columns(export_fields)
-    export_select_columns = ",\n    ".join(field for field, _ in export_columns)
+    export_select_columns = ",\n    ".join(PRODUCT_COLUMN_EXPRESSIONS[field] for field, _ in export_columns)
     where_sql, params = _build_where(filters)
     export_sql = text(
         f"""
         SELECT {export_select_columns}
-        FROM amazon_product_info
+        {PRODUCT_OWNER_JOIN_SQL}
         {where_sql}
-        ORDER BY updated_at DESC, id DESC
+        ORDER BY p.updated_at DESC, p.id DESC
         """
     )
 
@@ -217,13 +263,24 @@ def resolve_export_columns(export_fields: list[str] | tuple[str, ...] | None = N
 def get_filter_options() -> dict[str, list[str]]:
     engine = get_engine()
     if engine is None:
-        return {"store_sites": [], "brands": [], "sales_statuses": [], "listings": []}
+        return {
+            "store_sites": [],
+            "brands": [],
+            "sales_statuses": [],
+            "listings": [],
+            "listing_owners": [],
+            "listing_owner_statuses": [],
+            "project_groups": [],
+        }
 
     queries = {
         "store_sites": "SELECT DISTINCT store_site FROM amazon_product_info WHERE store_site IS NOT NULL AND store_site <> '' ORDER BY store_site LIMIT 200",
         "brands": "SELECT DISTINCT brand FROM amazon_product_info WHERE brand IS NOT NULL AND brand <> '' ORDER BY brand LIMIT 200",
         "sales_statuses": "SELECT DISTINCT sales_status FROM amazon_product_info WHERE sales_status IS NOT NULL AND sales_status <> '' ORDER BY sales_status LIMIT 100",
         "listings": "SELECT DISTINCT listing FROM amazon_product_info WHERE listing IS NOT NULL AND listing <> '' ORDER BY listing LIMIT 300",
+        "listing_owners": "SELECT DISTINCT owner FROM amazon_listing_owner_config WHERE owner IS NOT NULL AND owner <> '' ORDER BY owner LIMIT 300",
+        "listing_owner_statuses": "SELECT DISTINCT listing_status FROM amazon_listing_owner_config WHERE listing_status IS NOT NULL AND listing_status <> '' ORDER BY listing_status LIMIT 100",
+        "project_groups": "SELECT DISTINCT project_group FROM amazon_listing_owner_config WHERE project_group IS NOT NULL AND project_group <> '' ORDER BY project_group LIMIT 100",
     }
 
     with engine.connect() as conn:
@@ -463,26 +520,31 @@ def _build_where(filters: ProductFilters) -> tuple[str, dict[str, object]]:
         clauses.append(
             """
             (
-                msku LIKE :q
-                OR asin LIKE :q
-                OR sku LIKE :q
-                OR listing LIKE :q
-                OR product_name LIKE :q
+                p.msku LIKE :q
+                OR p.asin LIKE :q
+                OR p.sku LIKE :q
+                OR p.listing LIKE :q
+                OR p.product_name LIKE :q
+                OR lo.owner LIKE :q
+                OR lo.project_group LIKE :q
             )
             """
         )
         params["q"] = f"%{filters.q}%"
 
     exact_filters = {
-        "store_site": filters.store_site,
-        "brand": filters.brand,
-        "sales_status": filters.sales_status,
-        "listing": filters.listing,
+        "p.store_site": ("store_site", filters.store_site),
+        "p.brand": ("brand", filters.brand),
+        "p.sales_status": ("sales_status", filters.sales_status),
+        "p.listing": ("listing", filters.listing),
+        "lo.owner": ("listing_owner", filters.listing_owner),
+        "lo.listing_status": ("listing_owner_status", filters.listing_owner_status),
+        "lo.project_group": ("project_group", filters.project_group),
     }
-    for field, value in exact_filters.items():
+    for field, (param_name, value) in exact_filters.items():
         if value:
-            clauses.append(f"{field} = :{field}")
-            params[field] = value
+            clauses.append(f"{field} = :{param_name}")
+            params[param_name] = value
 
     if not clauses:
         return "", params

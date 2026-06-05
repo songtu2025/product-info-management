@@ -5,6 +5,7 @@
 {%- endmacro %}
 
 {% block content %}
+  <div class="form-shell">
   <div class="form-page-header">
     <div>
       <a class="detail-back-link" href="/store-sites">返回店铺站点</a>
@@ -60,7 +61,7 @@
     </div>
   </form>
 
-  <script id="store-site-domain-by-country" type="application/json">{{ domain_by_country | tojson }}</script>
+  <script id="store-site-domain-by-country" type="application/json">{{ domain_by_country | default({}) | tojson }}</script>
   <script>
     const storeSiteInput = document.getElementById("store_site");
     const storeInput = document.getElementById("store");
@@ -83,4 +84,5 @@
     storeSiteInput.addEventListener("input", fillStoreSiteFields);
     fillStoreSiteFields();
   </script>
+  </div>
 {% endblock %}

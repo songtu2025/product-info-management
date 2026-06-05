@@ -7,9 +7,12 @@ from app.core.config import get_settings
 from app.core.security import require_admin
 from app.core.templates import templates
 from app.modules.listing_owner.service import (
+    DuplicateListingOwnerError,
     LISTING_OWNER_PAGE_SIZES,
     ListingOwnerFilters,
+    build_create_payload,
     build_update_payload,
+    create_listing_owner,
     get_filter_options,
     get_listing_owner,
     list_listing_owners,
@@ -18,6 +21,16 @@ from app.modules.listing_owner.service import (
 
 
 router = APIRouter(prefix="/listing-owners")
+
+
+def build_listing_owner_new_context(row: dict[str, object] | None = None, error: str | None = None) -> dict[str, object]:
+    return {
+        "app_name": get_settings().app_name,
+        "active_nav": "Listing 负责人",
+        "row": row or {},
+        "error": error,
+        "options": get_filter_options(),
+    }
 
 
 @router.get("", response_class=HTMLResponse)
@@ -114,6 +127,43 @@ def _ensure_page(value: object, filters: ListingOwnerFilters) -> dict[str, objec
         "page_size": filters.page_size,
         "pages": 1 if rows else 0,
     }
+
+
+@router.get("/new", response_class=HTMLResponse)
+def listing_owner_new(request: Request):
+    require_admin(request)
+    return templates.TemplateResponse(
+        request,
+        "listing_owner/new.html",
+        build_listing_owner_new_context(),
+    )
+
+
+@router.post("/new")
+async def listing_owner_create(request: Request):
+    user = require_admin(request)
+    form = await request.form()
+    payload = build_create_payload(dict(form))
+
+    try:
+        row_id = create_listing_owner(payload, changed_by=user.username)
+    except DuplicateListingOwnerError:
+        return templates.TemplateResponse(
+            request,
+            "listing_owner/new.html",
+            build_listing_owner_new_context(payload, "负责人配置已存在，请检查店铺站点和 Listing。"),
+            status_code=400,
+        )
+
+    if row_id:
+        return RedirectResponse("/listing-owners", status_code=303)
+
+    return templates.TemplateResponse(
+        request,
+        "listing_owner/new.html",
+        build_listing_owner_new_context(payload, "保存失败，请至少填写店铺站点和 Listing。"),
+        status_code=400,
+    )
 
 
 @router.get("/{row_id}/edit", response_class=HTMLResponse)
