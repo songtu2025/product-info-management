@@ -12,6 +12,7 @@ from app.modules.product_info.service import (
     create_product,
     _build_where,
     export_products_to_xlsx,
+    get_product_detail,
     list_products,
     list_products_for_export,
     normalize_filters,
@@ -180,6 +181,113 @@ def test_list_products_returns_lightweight_table_fields(monkeypatch):
     assert "listing_maintainer" not in rows[0]
     assert "include_inventory_age_assessment" not in rows[0]
     assert rows[0]["project_group"] == "GroupA"
+
+
+def test_get_product_detail_returns_related_store_and_listing_owner(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    asin TEXT,
+                    msku TEXT,
+                    store_site TEXT,
+                    parent_asin TEXT,
+                    product_name TEXT,
+                    sku TEXT,
+                    brand TEXT,
+                    fnsku TEXT,
+                    sales_status TEXT,
+                    storage_type TEXT,
+                    category_level_1 TEXT,
+                    category_a TEXT,
+                    category_b TEXT,
+                    listing TEXT,
+                    label_name TEXT,
+                    msku_shipping_remark TEXT,
+                    transfer_remark TEXT,
+                    msku_lock_status TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    store TEXT,
+                    country TEXT,
+                    domain TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, asin, msku, store_site, parent_asin, product_name, sku, brand, fnsku,
+                    sales_status, storage_type, category_level_1, category_a, category_b, listing,
+                    label_name, msku_shipping_remark, transfer_remark, msku_lock_status, created_at, updated_at
+                )
+                VALUES (
+                    1, 'B012345678', 'MSKU-001', 'SAYOLA:US', 'B0PARENT', 'Product 1', 'SKU-001',
+                    'BrandA', 'FNSKU-001', '在售', 'FBA', '服饰', '眼镜', '太阳镜', 'ListingA',
+                    '核心款', '发货备注', '借调备注', '否', '2026-06-01', '2026-06-02'
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site, store, country, domain)
+                VALUES (2, 'SAYOLA:US', 'SAYOLA', 'US', 'amazon.com')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    id, store_site, listing, owner, listing_status, listing_maintainer,
+                    include_inventory_age_assessment, project_group
+                )
+                VALUES (3, 'SAYOLA:US', 'ListingA', '张三', '正常', '李四', '是', '项目组A')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+
+    detail = get_product_detail(1)
+
+    assert detail is not None
+    assert detail["store_site"]["domain"] == "amazon.com"
+    assert detail["owner"]["id"] == 3
+    assert detail["owner"]["owner"] == "张三"
 
 
 def test_bulk_update_product_lock_status_updates_rows_and_logs(monkeypatch):

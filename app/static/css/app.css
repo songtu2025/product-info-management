@@ -886,6 +886,27 @@ textarea {
   padding: 0 16px 16px;
 }
 
+.relation-status-list {
+  display: grid;
+  gap: 10px;
+}
+
+.relation-status-item {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.relation-status-item:last-child {
+  border-bottom: 0;
+}
+
 .relation-link {
   display: flex;
   min-height: 38px;

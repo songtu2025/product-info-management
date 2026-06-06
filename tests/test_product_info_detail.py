@@ -40,6 +40,7 @@ def test_product_detail_renders_product_store_and_owner(monkeypatch):
                 "domain": "amazon.com",
             },
             "owner": {
+                "id": 3,
                 "owner": "张三",
                 "listing_status": "正常",
                 "listing_maintainer": "李四",
@@ -56,12 +57,16 @@ def test_product_detail_renders_product_store_and_owner(monkeypatch):
     assert "基础信息" in response.text
     assert "运营维护" in response.text
     assert "备注信息" in response.text
+    assert "业务关系" in response.text
+    assert "店铺站点已维护" in response.text
+    assert "负责人已配置" in response.text
     assert "MSKU-001" in response.text
     assert "Test Product" in response.text
     assert "FNSKU-001" in response.text
     assert "太阳镜" in response.text
     assert "amazon.com" in response.text
     assert "张三" in response.text
+    assert "/listing-owners/3/edit" in response.text
     assert "发货备注" in response.text
     assert "查看操作日志" in response.text
     assert "/operation-logs?table_name=amazon_product_info&amp;record_id=7" in response.text
@@ -86,6 +91,7 @@ def test_product_detail_links_to_create_listing_owner_when_missing(monkeypatch):
     response = client.get("/products/7")
 
     assert response.status_code == 200
+    assert "负责人配置缺失" in response.text
     assert "创建负责人配置" in response.text
     assert "/listing-owners/new?store_site=SAYOLA%3AUS&amp;listing=ListingA" in response.text
 

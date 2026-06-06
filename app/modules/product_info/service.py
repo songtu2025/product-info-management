@@ -392,6 +392,7 @@ def get_product_detail(product_id: int) -> dict[str, object] | None:
     owner_sql = text(
         """
         SELECT
+            id,
             owner,
             listing_status,
             listing_maintainer,

@@ -92,6 +92,31 @@
     <aside class="space-y-4">
       <section class="content-panel relation-panel">
         <div class="detail-panel-heading">
+          <h3 class="detail-panel-title">业务关系</h3>
+          <p class="detail-panel-subtitle">当前产品在三张核心表里的关联状态。</p>
+        </div>
+        <div class="relation-status-list p-4">
+          <div class="relation-status-item">
+            <span>店铺站点</span>
+            {% if store %}
+              <span class="status-badge">店铺站点已维护</span>
+            {% else %}
+              <span class="status-badge status-badge-muted">店铺站点未维护</span>
+            {% endif %}
+          </div>
+          <div class="relation-status-item">
+            <span>Listing 负责人</span>
+            {% if owner %}
+              <span class="status-badge">负责人已配置</span>
+            {% else %}
+              <span class="status-badge status-badge-muted">负责人配置缺失</span>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="content-panel relation-panel">
+        <div class="detail-panel-heading">
           <h3 class="detail-panel-title">店铺站点</h3>
           <p class="detail-panel-subtitle">当前产品关联的店铺配置。</p>
         </div>
@@ -135,6 +160,9 @@
           {% endif %}
           {% if product.listing %}
             <a class="relation-link" href="/listing-owners?q={{ product.listing|urlencode }}">按 Listing 查看负责人 <span>进入</span></a>
+          {% endif %}
+          {% if can_edit and owner and owner.id %}
+            <a class="relation-link" href="/listing-owners/{{ owner.id }}/edit">编辑负责人配置 <span>进入</span></a>
           {% endif %}
           {% if can_edit and not owner and product.store_site and product.listing %}
             <a class="relation-link" href="/listing-owners/new?store_site={{ product.store_site|urlencode }}&amp;listing={{ product.listing|urlencode }}">创建负责人配置 <span>进入</span></a>
