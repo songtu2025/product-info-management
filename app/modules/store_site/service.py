@@ -1,4 +1,7 @@
+from time import monotonic
+
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.db import get_engine
 from app.shared.audit import build_change_set, record_operation_log
@@ -6,10 +9,38 @@ from app.shared.audit import build_change_set, record_operation_log
 
 EDITABLE_FIELDS = ("store", "country", "domain")
 CREATE_FIELDS = ("store_site", "store", "country", "domain")
+STORE_SITE_LIST_CACHE_TTL_SECONDS = 300
+_store_site_list_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.0, "value": None}
 
 
 class DuplicateStoreSiteError(Exception):
     pass
+
+
+class UnknownStoreSiteError(Exception):
+    pass
+
+
+def store_site_exists(conn, store_site: str | None) -> bool:
+    if not store_site:
+        return False
+    try:
+        return (
+            conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM amazon_store_site
+                    WHERE store_site = :store_site
+                    LIMIT 1
+                    """
+                ),
+                {"store_site": store_site},
+            ).first()
+            is not None
+        )
+    except SQLAlchemyError:
+        return False
 
 
 def list_store_sites(q: str | None = None) -> list[dict[str, object]]:
@@ -18,6 +49,16 @@ def list_store_sites(q: str | None = None) -> list[dict[str, object]]:
         return []
 
     q = _clean(q)
+    now = monotonic()
+    engine_id = id(engine)
+    if (
+        q is None
+        and _store_site_list_cache["engine_id"] == engine_id
+        and _store_site_list_cache["value"] is not None
+        and now < _store_site_list_cache["expires_at"]
+    ):
+        return _store_site_list_cache["value"]
+
     params: dict[str, object] = {}
     where_sql = ""
     if q:
@@ -38,7 +79,101 @@ def list_store_sites(q: str | None = None) -> list[dict[str, object]]:
         """
     )
     with engine.connect() as conn:
-        return [dict(row) for row in conn.execute(sql, params).mappings()]
+        rows = [dict(row) for row in conn.execute(sql, params).mappings()]
+        _attach_relation_counts(conn, rows)
+    if q is None:
+        _store_site_list_cache.update(
+            {
+                "engine_id": engine_id,
+                "expires_at": now + STORE_SITE_LIST_CACHE_TTL_SECONDS,
+                "value": rows,
+            }
+        )
+    return rows
+
+
+def _attach_relation_counts(conn, rows: list[dict[str, object]]) -> None:
+    for row in rows:
+        row["product_count"] = 0
+        row["owner_config_count"] = 0
+        row["missing_owner_product_count"] = 0
+    if not rows:
+        return
+
+    product_available = _table_available(conn, "amazon_product_info")
+    owner_available = _table_available(conn, "amazon_listing_owner_config")
+    if product_available:
+        _merge_counts(
+            rows,
+            conn.execute(
+                text(
+                    """
+                    SELECT store_site, COUNT(*) AS count
+                    FROM amazon_product_info
+                    WHERE store_site IS NOT NULL AND TRIM(store_site) <> ''
+                    GROUP BY store_site
+                    """
+                )
+            ).mappings(),
+            "product_count",
+        )
+    if owner_available:
+        _merge_counts(
+            rows,
+            conn.execute(
+                text(
+                    """
+                    SELECT store_site, COUNT(*) AS count
+                    FROM amazon_listing_owner_config
+                    WHERE store_site IS NOT NULL AND TRIM(store_site) <> ''
+                    GROUP BY store_site
+                    """
+                )
+            ).mappings(),
+            "owner_config_count",
+        )
+    if product_available and owner_available:
+        _merge_counts(
+            rows,
+            conn.execute(
+                text(
+                    """
+                    SELECT p.store_site, COUNT(*) AS count
+                    FROM amazon_product_info p
+                    LEFT JOIN amazon_listing_owner_config lo
+                      ON p.store_site = lo.store_site
+                     AND p.listing = lo.listing
+                    WHERE p.store_site IS NOT NULL
+                      AND TRIM(p.store_site) <> ''
+                      AND p.listing IS NOT NULL
+                      AND TRIM(p.listing) <> ''
+                      AND lo.id IS NULL
+                    GROUP BY p.store_site
+                    """
+                )
+            ).mappings(),
+            "missing_owner_product_count",
+        )
+
+
+def _merge_counts(rows: list[dict[str, object]], count_rows, field: str) -> None:
+    rows_by_store_site = {row["store_site"]: row for row in rows}
+    for count_row in count_rows:
+        row = rows_by_store_site.get(count_row["store_site"])
+        if row is not None:
+            row[field] = count_row["count"]
+
+
+def _table_available(conn, table_name: str) -> bool:
+    try:
+        conn.execute(text(f"SELECT 1 FROM {table_name} LIMIT 1")).first()
+        return True
+    except SQLAlchemyError:
+        return False
+
+
+def clear_store_site_list_cache() -> None:
+    _store_site_list_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
 
 
 def get_store_site(store_site_id: int) -> dict[str, object] | None:
@@ -131,6 +266,7 @@ def create_store_site(
             changed_by=changed_by,
         )
 
+    clear_store_site_list_cache()
     return store_site_id
 
 
@@ -183,6 +319,8 @@ def update_store_site(
                 changed_by=changed_by,
             )
 
+    if result.rowcount > 0:
+        clear_store_site_list_cache()
     return result.rowcount > 0
 
 

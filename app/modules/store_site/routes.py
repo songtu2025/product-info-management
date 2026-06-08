@@ -50,12 +50,13 @@ def store_site_list(request: Request, q: str | None = None):
 
 
 @router.get("/new", response_class=HTMLResponse)
-def store_site_new(request: Request):
+def store_site_new(request: Request, store_site: str | None = None):
     require_admin(request)
+    row = {"store_site": store_site} if store_site else None
     return templates.TemplateResponse(
         request,
         "store_site/new.html",
-        build_store_site_new_context(),
+        build_store_site_new_context(row),
     )
 
 

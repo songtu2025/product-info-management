@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% macro value(text) -%}
   {{ text if text not in [None, ""] else "-" }}
@@ -6,9 +6,15 @@
 
 {% block content %}
   <div class="quality-workbench">
-  {% set ns = namespace(issue_total=0) %}
-  {% for issue in report.issues %}
-    {% set ns.issue_total = ns.issue_total + issue.count %}
+  {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
+  {% set field_issues = report.field_issues %}
+  {% set relation_issues = report.relation_issues %}
+  {% set ns = namespace(field_total=0, relation_total=0) %}
+  {% for issue in field_issues %}
+    {% set ns.field_total = ns.field_total + issue.count %}
+  {% endfor %}
+  {% for issue in relation_issues %}
+    {% set ns.relation_total = ns.relation_total + issue.count %}
   {% endfor %}
 
   <section class="content-panel quality-hero">
@@ -18,6 +24,13 @@
       <p class="quality-copy">
         共 {{ report.total }} 条产品。当前只做只读检查，不修改任何数据。
       </p>
+      {% if store_site %}
+        <p class="quality-copy">
+          当前店铺站点：{{ store_site }}
+          <a class="action-link" href="/data-quality">清除筛选</a>
+        </p>
+      {% endif %}
+      <a class="btn-secondary mt-3 inline-flex items-center" href="/data-quality/export{% if store_site %}?store_site={{ store_site|urlencode }}{% endif %}">导出问题清单</a>
     </div>
     <div class="quality-stat-grid">
       <div class="quality-stat">
@@ -26,7 +39,11 @@
       </div>
       <div class="quality-stat quality-stat-warning">
         <span class="quality-stat-label">待补字段</span>
-        <strong class="quality-stat-value">{{ ns.issue_total }}</strong>
+        <strong class="quality-stat-value">{{ ns.field_total }}</strong>
+      </div>
+      <div class="quality-stat quality-stat-relation">
+        <span class="quality-stat-label">关系异常</span>
+        <strong class="quality-stat-value">{{ ns.relation_total }}</strong>
       </div>
     </div>
   </section>
@@ -35,33 +52,57 @@
     <div class="quality-block-heading">
       <div>
         <h3 class="quality-block-title">检查项概览</h3>
-        <p class="quality-block-copy">先看有问题的字段，再进入下方明细定位具体产品。</p>
+        <p class="quality-block-copy">先看字段完整性，再看产品与负责人配置的业务关系。</p>
       </div>
     </div>
-    <div class="quality-metrics">
-    {% for issue in report.issues %}
-      <section class="quality-card{% if issue.count == 0 %} quality-card-clean{% endif %}">
-        <div class="quality-card-label">{{ issue.label }}</div>
-        <div class="quality-card-row">
-          <strong class="quality-card-count">{{ issue.count }}</strong>
-          <span class="status-badge{% if issue.count == 0 %} status-badge-muted{% endif %}">
-            {{ "已通过" if issue.count == 0 else "优先处理" }}
-          </span>
+    <div class="quality-overview-groups">
+      <section class="quality-overview-group">
+        <h4 class="quality-group-title">字段完整性</h4>
+        <div class="quality-metrics">
+        {% for issue in field_issues %}
+          <section class="quality-card{% if issue.count == 0 %} quality-card-clean{% endif %}">
+            <div class="quality-card-label">{{ issue.label }}</div>
+            <div class="quality-card-row">
+              <strong class="quality-card-count">{{ issue.count }}</strong>
+              <span class="status-badge{% if issue.count == 0 %} status-badge-muted{% endif %}">
+                {{ "已通过" if issue.count == 0 else "优先处理" }}
+              </span>
+            </div>
+          </section>
+        {% endfor %}
         </div>
       </section>
-    {% endfor %}
+
+      <section class="quality-overview-group">
+        <h4 class="quality-group-title">业务关系健康</h4>
+        <div class="quality-metrics quality-relation-metrics">
+        {% for issue in relation_issues %}
+          <section class="quality-card{% if issue.count == 0 %} quality-card-clean{% endif %}">
+            <div class="quality-card-label">{{ issue.label }}</div>
+            <div class="quality-card-row">
+              <strong class="quality-card-count">{{ issue.count }}</strong>
+              <span class="status-badge{% if issue.count == 0 %} status-badge-muted{% endif %}">
+                {{ "已通过" if issue.count == 0 else "需要核对" }}
+              </span>
+            </div>
+          </section>
+        {% endfor %}
+        </div>
+      </section>
     </div>
   </section>
 
   <div class="quality-block-heading quality-detail-heading">
     <div>
       <h3 class="quality-block-title">问题明细</h3>
-      <p class="quality-block-copy">每类问题显示前 20 条，点击详情进入产品档案核对。</p>
+      <p class="quality-block-copy">每类问题显示前 20 条，字段问题回到产品档案，关系问题回到对应配置。</p>
     </div>
   </div>
 
+  <section class="quality-detail-group">
+    <h4 class="quality-group-title">字段完整性</h4>
   <div class="quality-sections">
-    {% for issue in report.issues %}
+    {% for issue in field_issues %}
       <section class="content-panel">
         <div class="panel-heading quality-section-heading">
           <div>
@@ -103,5 +144,79 @@
       </section>
     {% endfor %}
   </div>
+  </section>
+
+  <section class="quality-detail-group">
+    <h4 class="quality-group-title">业务关系健康</h4>
+    <div class="quality-sections">
+    {% for issue in relation_issues %}
+      <section class="content-panel">
+        <div class="panel-heading quality-section-heading">
+          <div>
+            <h3 class="panel-title">{{ issue.label }}</h3>
+            <p class="panel-subtitle">共 {{ issue.count }} 条，显示前 20 条</p>
+          </div>
+          <span class="status-badge{% if issue.count == 0 %} status-badge-muted{% endif %}">
+            {{ "无问题" if issue.count == 0 else "需要核对" }}
+          </span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table text-sm">
+            <thead>
+              <tr>
+                <th class="table-head">店铺站点</th>
+                <th class="table-head">Listing</th>
+                <th class="table-head">MSKU / 负责人</th>
+                <th class="table-head">产品名称</th>
+                <th class="table-head">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in issue.rows %}
+                <tr class="table-row">
+                  <td class="table-cell">{{ value(row.store_site) }}</td>
+                  <td class="table-cell font-medium text-blue-800">{{ value(row.listing) }}</td>
+                  <td class="table-cell">{{ value(row.msku if row.msku else row.owner) }}</td>
+                  <td class="table-cell quality-product-name" title="{{ row.product_name or '' }}">{{ value(row.product_name) }}</td>
+                  <td class="table-cell">
+                    <div class="row-actions">
+                      {% if issue.key == "missing_listing_owner_config" %}
+                        <a class="action-link" href="/products/{{ row.id }}">查看产品</a>
+                        {% if can_edit and row.store_site and row.listing %}
+                          <a class="action-link" href="/listing-owners/new?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">创建负责人配置</a>
+                        {% endif %}
+                      {% elif issue.key in ["unknown_product_store_site", "unknown_listing_owner_store_site"] %}
+                        {% if issue.key == "unknown_product_store_site" %}
+                          <a class="action-link" href="/products/{{ row.id }}">查看产品</a>
+                        {% elif row.listing %}
+                          <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>
+                        {% else %}
+                          <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">查看负责人配置</a>
+                        {% endif %}
+                        {% if can_edit and row.store_site %}
+                          <a class="action-link" href="/store-sites/new?store_site={{ row.store_site|urlencode }}">创建店铺站点</a>
+                        {% endif %}
+                      {% else %}
+                        {% if row.listing %}
+                          <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>
+                        {% else %}
+                          <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">查看负责人配置</a>
+                        {% endif %}
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td class="quality-empty" colspan="5">暂无关系问题</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {% endfor %}
+    </div>
+  </section>
   </div>
 {% endblock %}

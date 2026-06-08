@@ -32,6 +32,7 @@ def test_update_product_writes_operation_log(monkeypatch):
                     sku TEXT,
                     product_name TEXT,
                     brand TEXT,
+                    listing TEXT,
                     sales_status TEXT,
                     storage_type TEXT,
                     category_level_1 TEXT,
@@ -100,6 +101,24 @@ def test_update_product_writes_operation_log(monkeypatch):
 def test_create_product_inserts_row_and_writes_operation_log(monkeypatch):
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT NOT NULL
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site)
+                VALUES (1, 'SAYOLA:US')
+                """
+            )
+        )
         conn.execute(
             text(
                 """

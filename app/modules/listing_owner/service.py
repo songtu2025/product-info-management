@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from math import ceil
+from time import monotonic
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.db import get_engine
 from app.shared.audit import build_change_set, record_operation_log
+from app.modules.store_site.service import UnknownStoreSiteError, store_site_exists
 
 
 EDITABLE_FIELDS = (
@@ -17,6 +20,8 @@ EDITABLE_FIELDS = (
 CREATE_FIELDS = ("store_site", "listing", *EDITABLE_FIELDS)
 
 LISTING_OWNER_PAGE_SIZES = (50, 100, 200)
+FILTER_OPTIONS_CACHE_TTL_SECONDS = 300
+_filter_options_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.0, "value": None}
 
 
 class DuplicateListingOwnerError(Exception):
@@ -43,25 +48,51 @@ def list_listing_owners(filters: ListingOwnerFilters | str | None = None) -> dic
         return _empty_page(filters)
 
     where_sql, params = _build_where(filters)
+    list_where_sql, _ = _build_where(filters, table_alias="lo")
     offset = (filters.page - 1) * filters.page_size
     params.update({"limit": filters.page_size, "offset": offset})
+
+    has_product_table = _product_table_available(engine)
+    product_count_sql = (
+        """
+            COALESCE(pc.product_count, 0) AS product_count
+        """
+        if has_product_table
+        else "0 AS product_count"
+    )
+    product_join_sql = (
+        """
+        LEFT JOIN (
+            SELECT store_site, listing, COUNT(*) AS product_count
+            FROM amazon_product_info
+            WHERE listing IS NOT NULL AND TRIM(listing) <> ''
+            GROUP BY store_site, listing
+        ) pc
+          ON pc.store_site = lo.store_site
+         AND pc.listing = lo.listing
+        """
+        if has_product_table
+        else ""
+    )
 
     count_sql = text(f"SELECT COUNT(*) FROM amazon_listing_owner_config {where_sql}")
     list_sql = text(
         f"""
         SELECT
-            id,
-            store_site,
-            listing,
-            owner,
-            listing_status,
-            listing_maintainer,
-            include_inventory_age_assessment,
-            project_group,
-            updated_at
-        FROM amazon_listing_owner_config
-        {where_sql}
-        ORDER BY store_site, listing
+            lo.id,
+            lo.store_site,
+            lo.listing,
+            lo.owner,
+            lo.listing_status,
+            lo.listing_maintainer,
+            lo.include_inventory_age_assessment,
+            lo.project_group,
+            {product_count_sql},
+            lo.updated_at
+        FROM amazon_listing_owner_config lo
+        {product_join_sql}
+        {list_where_sql}
+        ORDER BY lo.store_site, lo.listing
         LIMIT :limit OFFSET :offset
         """
     )
@@ -83,6 +114,14 @@ def get_filter_options() -> dict[str, list[str]]:
     engine = get_engine()
     if engine is None:
         return _empty_options()
+    now = monotonic()
+    engine_id = id(engine)
+    if (
+        _filter_options_cache["engine_id"] == engine_id
+        and _filter_options_cache["value"] is not None
+        and now < _filter_options_cache["expires_at"]
+    ):
+        return _filter_options_cache["value"]
 
     queries = {
         "store_sites": "SELECT DISTINCT store_site AS value FROM amazon_listing_owner_config WHERE store_site IS NOT NULL AND store_site <> '' ORDER BY store_site LIMIT 300",
@@ -93,25 +132,52 @@ def get_filter_options() -> dict[str, list[str]]:
         "project_groups": "SELECT DISTINCT project_group AS value FROM amazon_listing_owner_config WHERE project_group IS NOT NULL AND project_group <> '' ORDER BY project_group LIMIT 100",
     }
     with engine.connect() as conn:
-        return {
+        options = {
             key: [row["value"] for row in conn.execute(text(sql)).mappings()]
             for key, sql in queries.items()
         }
+    _filter_options_cache.update(
+        {
+            "engine_id": engine_id,
+            "expires_at": now + FILTER_OPTIONS_CACHE_TTL_SECONDS,
+            "value": options,
+        }
+    )
+    return options
 
 
-def _build_where(filters: ListingOwnerFilters) -> tuple[str, dict[str, object]]:
+def clear_filter_options_cache() -> None:
+    _filter_options_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
+
+
+def _product_table_available(engine) -> bool:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1 FROM amazon_product_info LIMIT 1")).first()
+        return True
+    except SQLAlchemyError:
+        return False
+
+
+def _build_where(
+    filters: ListingOwnerFilters,
+    table_alias: str | None = None,
+) -> tuple[str, dict[str, object]]:
+    def column(field: str) -> str:
+        return f"{table_alias}.{field}" if table_alias else field
+
     clauses: list[str] = []
     params: dict[str, object] = {}
     if filters.q:
         clauses.append(
-            """
+            f"""
             (
-                store_site LIKE :q
-                OR listing LIKE :q
-                OR owner LIKE :q
-                OR listing_status LIKE :q
-                OR listing_maintainer LIKE :q
-                OR project_group LIKE :q
+                {column("store_site")} LIKE :q
+                OR {column("listing")} LIKE :q
+                OR {column("owner")} LIKE :q
+                OR {column("listing_status")} LIKE :q
+                OR {column("listing_maintainer")} LIKE :q
+                OR {column("project_group")} LIKE :q
             )
             """
         )
@@ -127,7 +193,7 @@ def _build_where(filters: ListingOwnerFilters) -> tuple[str, dict[str, object]]:
     }
     for field, value in exact_filters.items():
         if value:
-            clauses.append(f"{field} = :{field}")
+            clauses.append(f"{column(field)} = :{field}")
             params[field] = value
 
     if not clauses:
@@ -220,6 +286,8 @@ def create_listing_owner(
         ).first()
         if duplicate:
             raise DuplicateListingOwnerError
+        if not store_site_exists(conn, store_site):
+            raise UnknownStoreSiteError
 
         result = conn.execute(insert_sql, allowed_payload)
         row_id = result.lastrowid
@@ -237,6 +305,7 @@ def create_listing_owner(
             changed_by=changed_by,
         )
 
+    clear_filter_options_cache()
     return row_id
 
 
@@ -289,7 +358,112 @@ def update_listing_owner(
                 changed_by=changed_by,
             )
 
+    if result.rowcount > 0:
+        clear_filter_options_cache()
     return result.rowcount > 0
+
+
+def bulk_assign_listing_owner_from_products(
+    product_ids: list[int],
+    owner: str,
+    changed_by: str = "system",
+) -> dict[str, int]:
+    clean_ids = list(dict.fromkeys(product_id for product_id in product_ids if product_id > 0))
+    owner = owner.strip()
+    if not clean_ids or not owner:
+        return {"created": 0, "updated": 0, "skipped": len(clean_ids), "requested": len(clean_ids)}
+
+    engine = get_engine()
+    if engine is None:
+        return {"created": 0, "updated": 0, "skipped": len(clean_ids), "requested": len(clean_ids)}
+
+    id_params = {f"id_{index}": product_id for index, product_id in enumerate(clean_ids)}
+    id_placeholders = ", ".join(f":{key}" for key in id_params)
+    products_sql = text(
+        f"""
+        SELECT DISTINCT store_site, listing
+        FROM amazon_product_info
+        WHERE id IN ({id_placeholders})
+        """
+    )
+    existing_sql = text(
+        """
+        SELECT id, owner
+        FROM amazon_listing_owner_config
+        WHERE store_site = :store_site AND listing = :listing
+        LIMIT 1
+        """
+    )
+    insert_sql = text(
+        """
+        INSERT INTO amazon_listing_owner_config (store_site, listing, owner)
+        VALUES (:store_site, :listing, :owner)
+        """
+    )
+    update_sql = text(
+        """
+        UPDATE amazon_listing_owner_config
+        SET owner = :owner
+        WHERE id = :row_id
+        """
+    )
+
+    created = 0
+    updated = 0
+    skipped = 0
+    with engine.begin() as conn:
+        product_rows = [dict(row) for row in conn.execute(products_sql, id_params).mappings()]
+        for row in product_rows:
+            store_site = row.get("store_site")
+            listing = row.get("listing")
+            if not store_site or not listing:
+                skipped += 1
+                continue
+
+            existing = conn.execute(
+                existing_sql,
+                {"store_site": store_site, "listing": listing},
+            ).mappings().first()
+            if existing:
+                changes = build_change_set(dict(existing), {"owner": owner})
+                if not changes:
+                    skipped += 1
+                    continue
+                result = conn.execute(update_sql, {"row_id": existing["id"], "owner": owner})
+                if result.rowcount > 0:
+                    updated += 1
+                    record_operation_log(
+                        conn,
+                        table_name="amazon_listing_owner_config",
+                        record_id=existing["id"],
+                        operation_type="UPDATE",
+                        change_data=changes,
+                        changed_by=changed_by,
+                    )
+                continue
+
+            result = conn.execute(
+                insert_sql,
+                {"store_site": store_site, "listing": listing, "owner": owner},
+            )
+            row_id = result.lastrowid
+            created += 1
+            record_operation_log(
+                conn,
+                table_name="amazon_listing_owner_config",
+                record_id=row_id,
+                operation_type="INSERT",
+                change_data={
+                    "store_site": {"old": None, "new": store_site},
+                    "listing": {"old": None, "new": listing},
+                    "owner": {"old": None, "new": owner},
+                },
+                changed_by=changed_by,
+            )
+
+    if created or updated:
+        clear_filter_options_cache()
+    return {"created": created, "updated": updated, "skipped": skipped, "requested": len(clean_ids)}
 
 
 def _clean(value: str | None) -> str | None:

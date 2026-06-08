@@ -383,8 +383,14 @@ textarea {
 
 .quality-stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .quality-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .quality-stat {
@@ -398,6 +404,11 @@ textarea {
 .quality-stat-warning {
   border-color: #fed7aa;
   background: #fff7ed;
+}
+
+.quality-stat-relation {
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 
 .quality-stat-label {
@@ -443,6 +454,24 @@ textarea {
   margin-top: 18px;
 }
 
+.quality-overview-groups,
+.quality-detail-group {
+  display: grid;
+  gap: 14px;
+}
+
+.quality-overview-group,
+.quality-detail-group {
+  min-width: 0;
+}
+
+.quality-group-title {
+  margin-bottom: 8px;
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .quality-metrics {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -458,6 +487,12 @@ textarea {
 @media (min-width: 1280px) {
   .quality-metrics {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .quality-relation-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -656,6 +691,54 @@ textarea {
   padding: 14px;
 }
 
+.import-change-list {
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+  white-space: normal;
+}
+
+.import-change-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 7px 9px;
+}
+
+.import-change-field {
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.import-change-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.import-change-label {
+  margin-right: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.import-change-old {
+  color: var(--text-muted);
+}
+
+.import-change-new {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.import-change-arrow {
+  color: var(--text-soft);
+}
+
 .list-panel-tools {
   display: flex;
   flex-direction: column;
@@ -849,6 +932,27 @@ textarea {
   display: grid;
   gap: 8px;
   padding: 0 16px 16px;
+}
+
+.relation-status-list {
+  display: grid;
+  gap: 10px;
+}
+
+.relation-status-item {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.relation-status-item:last-child {
+  border-bottom: 0;
 }
 
 .relation-link {

@@ -1,11 +1,11 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% macro value(text) -%}
   {{ text if text not in [None, ""] else "-" }}
 {%- endmacro %}
 
 {% block content %}
-  <form class="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:grid-cols-[1fr_160px_160px_auto]" method="get">
+  <form class="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:grid-cols-[1fr_140px_140px_140px_150px_150px_120px_auto]" method="get">
     <label class="field">
       <span class="field-label">表名</span>
       <input class="field-input" name="table_name" value="{{ filters.table_name or '' }}" placeholder="amazon_product_info">
@@ -18,6 +18,26 @@
       <span class="field-label">操作类型</span>
       <input class="field-input" name="operation_type" value="{{ filters.operation_type or '' }}" placeholder="UPDATE">
     </label>
+    <label class="field">
+      <span class="field-label">操作人</span>
+      <input class="field-input" name="changed_by" value="{{ filters.changed_by or '' }}" placeholder="admin">
+    </label>
+    <label class="field">
+      <span class="field-label">开始日期</span>
+      <input name="start_date" value="{{ filters.start_date or '' }}" class="field-input" type="date">
+    </label>
+    <label class="field">
+      <span class="field-label">结束日期</span>
+      <input name="end_date" value="{{ filters.end_date or '' }}" class="field-input" type="date">
+    </label>
+    <label class="field">
+      <span class="field-label">每页</span>
+      <select class="field-input" name="page_size">
+        {% for size in [50, 100, 200] %}
+          <option value="{{ size }}" {% if filters.page_size == size %}selected{% endif %}>{{ size }}</option>
+        {% endfor %}
+      </select>
+    </label>
     <div class="flex items-end gap-2">
       <button class="btn-primary" type="submit">查询</button>
       <a class="btn-secondary inline-flex items-center" href="/operation-logs">重置</a>
@@ -27,7 +47,7 @@
   <div class="content-panel">
     <div class="border-b border-slate-200 px-4 py-4">
       <h2 class="text-base font-semibold text-slate-950">操作日志</h2>
-      <p class="mt-1 text-sm text-slate-500">最多显示最近 200 条记录，只读展示。</p>
+      <p class="mt-1 text-sm text-slate-500">共 {{ log_page.total }} 条记录，只读展示。</p>
     </div>
 
     <div class="divide-y divide-slate-100">
@@ -73,4 +93,18 @@
       {% endfor %}
     </div>
   </div>
+
+  {% if log_page.pages > 1 %}
+    <div class="mt-4 flex items-center justify-between text-sm text-slate-600">
+      <span>第 {{ log_page.page }} / {{ log_page.pages }} 页</span>
+      <div class="flex gap-2">
+        {% if log_page.page > 1 %}
+          <a class="btn-secondary inline-flex items-center" href="{{ request.url.include_query_params(page=log_page.page - 1) }}">上一页</a>
+        {% endif %}
+        {% if log_page.page < log_page.pages %}
+          <a class="btn-secondary inline-flex items-center" href="{{ request.url.include_query_params(page=log_page.page + 1) }}">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 {% endblock %}

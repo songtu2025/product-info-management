@@ -30,6 +30,9 @@ def test_store_site_list_renders_rows(monkeypatch):
                 "country": "US",
                 "domain": "amazon.com",
                 "updated_at": None,
+                "product_count": 2,
+                "owner_config_count": 1,
+                "missing_owner_product_count": 1,
             }
         ],
     )
@@ -41,6 +44,12 @@ def test_store_site_list_renders_rows(monkeypatch):
     assert "amazon.com" in response.text
     assert "/store-sites/new" in response.text
     assert "/store-sites/1/edit" in response.text
+    assert "2 个产品" in response.text
+    assert "1 条配置" in response.text
+    assert "缺负责人 1" in response.text
+    assert "/?store_site=SAYOLA%3AUS" in response.text
+    assert "/listing-owners?q=SAYOLA%3AUS" in response.text
+    assert "/data-quality?store_site=SAYOLA%3AUS" in response.text
     assert "日志" in response.text
     assert "/operation-logs?table_name=amazon_store_site&amp;record_id=1" in response.text
 
@@ -54,6 +63,13 @@ def test_store_site_new_page_renders_create_form():
     assert "name=\"store\"" in response.text
     assert "name=\"country\"" in response.text
     assert "name=\"domain\"" in response.text
+
+
+def test_store_site_new_page_prefills_store_site_from_query():
+    response = client.get("/store-sites/new?store_site=UNKNOWN%3AUS")
+
+    assert response.status_code == 200
+    assert 'name="store_site" value="UNKNOWN:US"' in response.text
 
 
 def test_store_site_new_page_provides_auto_fill_data(monkeypatch):
@@ -236,6 +252,140 @@ def test_build_store_site_create_payload_keeps_create_fields():
         "country": None,
         "domain": "amazon.com",
     }
+
+
+def test_list_store_sites_reuses_cached_unfiltered_rows(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    store TEXT,
+                    country TEXT,
+                    domain TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site, store, country, domain, updated_at)
+                VALUES (1, 'SAYOLA:US', 'SAYOLA', 'US', 'amazon.com', '2026-06-05')
+                """
+            )
+        )
+
+    connect_count = 0
+    original_connect = engine.connect
+
+    def counted_connect(*args, **kwargs):
+        nonlocal connect_count
+        connect_count += 1
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    monkeypatch.setattr(engine, "connect", counted_connect)
+    service.clear_store_site_list_cache()
+
+    assert service.list_store_sites() == service.list_store_sites()
+    assert connect_count == 1
+
+
+def test_list_store_sites_returns_relation_counts(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_store_site (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    store TEXT,
+                    country TEXT,
+                    domain TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    msku TEXT,
+                    listing TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site, store, country, domain, updated_at)
+                VALUES
+                    (1, 'SAYOLA:US', 'SAYOLA', 'US', 'amazon.com', '2026-06-05'),
+                    (2, 'RIVBOS:CA', 'RIVBOS', 'CA', 'amazon.ca', '2026-06-06')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, msku, listing)
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'RB833'),
+                    (2, 'SAYOLA:US', 'MSKU-002', 'RB834'),
+                    (3, 'SAYOLA:US', 'MSKU-003', NULL),
+                    (4, 'UNKNOWN:US', 'MSKU-004', 'RB999')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (id, store_site, listing, owner)
+                VALUES
+                    (1, 'SAYOLA:US', 'RB833', '张三'),
+                    (2, 'RIVBOS:CA', 'RB900', '李四')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_store_site_list_cache()
+
+    rows = service.list_store_sites()
+
+    rows_by_store_site = {row["store_site"]: row for row in rows}
+    sayola = rows_by_store_site["SAYOLA:US"]
+    rivbos = rows_by_store_site["RIVBOS:CA"]
+    assert sayola["store_site"] == "SAYOLA:US"
+    assert sayola["product_count"] == 3
+    assert sayola["owner_config_count"] == 1
+    assert sayola["missing_owner_product_count"] == 1
+    assert rivbos["store_site"] == "RIVBOS:CA"
+    assert rivbos["product_count"] == 0
+    assert rivbos["owner_config_count"] == 1
+    assert rivbos["missing_owner_product_count"] == 0
 
 
 def test_create_store_site_writes_operation_log(monkeypatch):

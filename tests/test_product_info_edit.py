@@ -6,6 +6,7 @@ from app.modules.product_info.service import (
     build_create_payload,
     build_update_payload,
 )
+from app.modules.store_site.service import UnknownStoreSiteError
 
 
 client = TestClient(app)
@@ -45,6 +46,7 @@ def test_product_edit_page_renders_allowed_fields(monkeypatch):
     assert response.status_code == 200
     assert "Old Product" in response.text
     assert "name=\"product_name\"" in response.text
+    assert "name=\"listing\"" in response.text
     assert "name=\"sales_status\"" in response.text
     assert "name=\"msku\"" not in response.text
     assert "name=\"store_site\"" not in response.text
@@ -135,6 +137,32 @@ def test_product_new_post_shows_duplicate_product_error(monkeypatch):
     assert "MSKU-001" in response.text
 
 
+def test_product_new_post_shows_unknown_store_site_error(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_store_sites",
+        lambda: [
+            {"store_site": "SAYOLA:US"},
+            {"store_site": "RIVBOS:CA"},
+        ],
+    )
+
+    def fake_create_product(payload, changed_by="system"):
+        raise UnknownStoreSiteError
+
+    monkeypatch.setattr("app.modules.product_info.routes.create_product", fake_create_product)
+
+    response = client.post(
+        "/products/new",
+        data={"store_site": "UNKNOWN:US", "msku": "MSKU-001"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert "店铺站点不存在，请先维护店铺站点" in response.text
+    assert "/store-sites/new" in response.text
+    assert "UNKNOWN:US" in response.text
+
+
 def test_product_edit_post_updates_and_redirects(monkeypatch):
     captured = {}
     monkeypatch.setattr("app.modules.product_info.routes.get_product_detail", fake_detail)
@@ -152,6 +180,7 @@ def test_product_edit_post_updates_and_redirects(monkeypatch):
         data={
             "product_name": "New Product",
             "brand": "BrandB",
+            "listing": "ListingB",
             "sales_status": "停售",
             "storage_type": "FBA",
             "category_level_1": "服饰",
@@ -170,6 +199,7 @@ def test_product_edit_post_updates_and_redirects(monkeypatch):
     assert response.headers["location"] == "/products/7"
     assert captured["product_id"] == 7
     assert captured["payload"]["product_name"] == "New Product"
+    assert captured["payload"]["listing"] == "ListingB"
     assert captured["changed_by"] == "test-admin"
     assert "msku" not in captured["payload"]
 
@@ -179,6 +209,7 @@ def test_build_update_payload_keeps_only_editable_fields():
         {
             "product_name": "  New Product  ",
             "brand": "BrandB",
+            "listing": " ListingB ",
             "msku": "SHOULD-NOT-BE-UPDATED",
             "store_site": "SHOULD-NOT-BE-UPDATED",
             "label_name": "",
@@ -188,6 +219,7 @@ def test_build_update_payload_keeps_only_editable_fields():
     assert payload == {
         "product_name": "New Product",
         "brand": "BrandB",
+        "listing": "ListingB",
         "label_name": None,
     }
 

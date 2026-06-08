@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% block content %}
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
@@ -108,6 +108,7 @@
             <th class="table-head">维护人</th>
             <th class="table-head">纳入库龄考核</th>
             <th class="table-head">项目组</th>
+            <th class="table-head">关联产品数</th>
             <th class="table-head">更新时间</th>
             <th class="table-head">操作</th>
           </tr>
@@ -134,9 +135,19 @@
                 {% endif %}
               </td>
               <td class="table-cell">{{ row.project_group or "-" }}</td>
+              <td class="table-cell">
+                {% if row.product_count and row.product_count > 0 %}
+                  <span class="status-badge">{{ row.product_count }}</span>
+                {% else %}
+                  <span class="status-badge status-badge-muted">未被使用</span>
+                {% endif %}
+              </td>
               <td class="table-cell">{{ row.updated_at or "-" }}</td>
               <td class="table-cell">
                 <div class="row-actions">
+                  {% if row.store_site and row.listing %}
+                  <a class="action-link" href="/?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">查看产品</a>
+                  {% endif %}
                   <a class="action-link" href="/operation-logs?table_name=amazon_listing_owner_config&amp;record_id={{ row.id }}">日志</a>
                   {% if can_edit %}
                   <a class="action-link" href="/listing-owners/{{ row.id }}/edit">编辑</a>
@@ -146,7 +157,7 @@
             </tr>
           {% else %}
             <tr>
-              <td class="px-4 py-8 text-center text-slate-500" colspan="9">没有匹配的负责人配置</td>
+              <td class="px-4 py-8 text-center text-slate-500" colspan="10">没有匹配的负责人配置</td>
             </tr>
           {% endfor %}
         </tbody>

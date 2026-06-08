@@ -131,3 +131,20 @@ CREATE TABLE amazon_admin_user (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Amazon后台登录用户表';
+
+
+### 5.6 创建 `amazon_user_preference`
+
+
+CREATE TABLE amazon_user_preference (
+    username VARCHAR(64) NOT NULL COMMENT '登录账号',
+    preference_key VARCHAR(128) NOT NULL COMMENT '偏好键',
+    preference_value TEXT NOT NULL COMMENT '偏好值 JSON',
+
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    PRIMARY KEY (username, preference_key)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Amazon后台用户偏好表';

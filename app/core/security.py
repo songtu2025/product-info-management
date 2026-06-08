@@ -8,6 +8,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 
 from app.core.db import get_engine
+from app.shared.audit import record_operation_log
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,52 @@ def authenticate_user(username: str, password: str) -> AuthUser | None:
     if row is None or not verify_password(password, row["password_hash"]):
         return None
     return AuthUser(username=row["username"], role=row["role"])
+
+
+def change_user_password(username: str, current_password: str, new_password: str) -> bool:
+    if not username or not current_password or not new_password:
+        return False
+
+    engine = get_engine()
+    if engine is None:
+        return False
+
+    select_sql = text(
+        """
+        SELECT id, password_hash
+        FROM amazon_admin_user
+        WHERE username = :username AND is_active = 1
+        """
+    )
+    update_sql = text(
+        """
+        UPDATE amazon_admin_user
+        SET password_hash = :password_hash
+        WHERE id = :user_id
+        """
+    )
+    with engine.begin() as conn:
+        row = conn.execute(select_sql, {"username": username}).mappings().first()
+        if row is None or not verify_password(current_password, row["password_hash"]):
+            return False
+
+        result = conn.execute(
+            update_sql,
+            {
+                "user_id": row["id"],
+                "password_hash": hash_password(new_password),
+            },
+        )
+        if result.rowcount > 0:
+            record_operation_log(
+                conn,
+                table_name="amazon_admin_user",
+                record_id=row["id"],
+                operation_type="CHANGE_PASSWORD",
+                changed_by=username,
+                change_data={"password": {"old": None, "new": "CHANGED"}},
+            )
+    return result.rowcount > 0
 
 
 def current_user(request: Request) -> AuthUser | None:

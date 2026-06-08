@@ -1,4 +1,4 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% block content %}
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
@@ -32,6 +32,9 @@
             <th class="table-head">店铺</th>
             <th class="table-head">国家</th>
             <th class="table-head">域名</th>
+            <th class="table-head">关联产品</th>
+            <th class="table-head">负责人配置</th>
+            <th class="table-head">关系问题</th>
             <th class="table-head">更新时间</th>
             <th class="table-head">操作</th>
           </tr>
@@ -43,6 +46,19 @@
               <td class="table-cell">{{ row.store or "-" }}</td>
               <td class="table-cell">{{ row.country or "-" }}</td>
               <td class="table-cell">{{ row.domain or "-" }}</td>
+              <td class="table-cell">
+                <a class="action-link" href="/?store_site={{ row.store_site|urlencode }}">{{ row.product_count or 0 }} 个产品</a>
+              </td>
+              <td class="table-cell">
+                <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">{{ row.owner_config_count or 0 }} 条配置</a>
+              </td>
+              <td class="table-cell">
+                {% if row.missing_owner_product_count %}
+                  <a class="status-badge" href="/data-quality?store_site={{ row.store_site|urlencode }}">缺负责人 {{ row.missing_owner_product_count }}</a>
+                {% else %}
+                  <span class="status-badge status-badge-muted">关系正常</span>
+                {% endif %}
+              </td>
               <td class="table-cell">{{ row.updated_at or "-" }}</td>
               <td class="table-cell">
                 <div class="row-actions">
@@ -55,7 +71,7 @@
             </tr>
           {% else %}
             <tr>
-              <td class="px-4 py-8 text-center text-slate-500" colspan="6">没有匹配的店铺站点数据</td>
+              <td class="px-4 py-8 text-center text-slate-500" colspan="9">没有匹配的店铺站点数据</td>
             </tr>
           {% endfor %}
         </tbody>

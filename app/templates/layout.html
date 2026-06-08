@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ app_name }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/tailwind-lite.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
   </head>
   <body class="min-h-screen text-slate-900">
@@ -33,7 +33,7 @@
             {"label": "后续模块预留", "href": "#", "icon": "--"}
           ] %}
             {% if not item.admin_only or (current_user and current_user.role == "admin") %}
-              <a class="nav-link {% if item.label == active_nav %}nav-link-active{% endif %}" href="{{ item.href }}">
+              <a class="nav-link {% if item.label == active_nav %}nav-link-active{% endif %}" href="{{ item.href }}" data-partial-nav data-nav-label="{{ item.label }}">
                 <span class="nav-icon">{{ item.icon }}</span>
                 <span>{{ item.label }}</span>
               </a>
@@ -46,7 +46,7 @@
         <header class="app-header">
           <div class="flex min-h-16 items-center justify-between gap-4 px-5 py-3">
             <div>
-              <p class="page-kicker">{{ active_nav|default("产品信息") }}</p>
+              <p class="page-kicker" data-page-kicker>{{ active_nav|default("产品信息") }}</p>
               <h1 class="mt-1 text-lg font-bold text-slate-950">{{ app_name }}</h1>
             </div>
             <div class="hidden items-center gap-2 md:flex">
@@ -55,13 +55,14 @@
                   <div class="font-semibold text-slate-800">{{ current_user.username }}</div>
                   <div>{{ current_user.role }}</div>
                 </div>
+                <a class="btn-ghost" href="/account/password">修改密码</a>
                 <a class="btn-ghost" href="/logout">退出登录</a>
               {% endif %}
             </div>
           </div>
         </header>
 
-        <section class="flex-1 px-5 py-5">
+        <section class="flex-1 px-5 py-5" data-app-content>
           {% set flash_message = pop_flash(request) %}
           {% if flash_message %}
             <div class="flash-message flash-message-auto-dismiss" role="status">{{ flash_message }}</div>
@@ -70,5 +71,6 @@
         </section>
       </main>
     </div>
+    <script src="{{ url_for('static', path='js/partial-nav.js') }}"></script>
   </body>
 </html>

@@ -1,38 +1,64 @@
-{% extends "layout.html" %}
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% block content %}
-  <div class="mb-4">
-    <a class="text-sm font-medium text-blue-800 hover:underline" href="/admin-users">返回用户管理</a>
-    <h2 class="mt-2 text-xl font-semibold text-slate-950">编辑用户</h2>
-    <p class="mt-1 text-sm text-slate-500">{{ row.username }}。账号名不可修改，密码请后续通过重置密码功能处理。</p>
+  <div class="form-shell">
+  <div class="form-page-header">
+    <div>
+      <a class="detail-back-link" href="/admin-users">返回用户管理</a>
+      <h2 class="form-title">编辑用户</h2>
+      <p class="form-subtitle">账号名不可修改，密码请通过重置密码功能单独处理。</p>
+    </div>
   </div>
 
   {% if error %}
-    <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {{ error }}
-    </div>
+    <div class="form-alert">{{ error }}</div>
   {% endif %}
 
   <form class="content-panel" method="post">
-    <div class="grid gap-4 p-4 md:grid-cols-2">
-      <label class="field">
-        <span class="field-label">角色</span>
-        <select class="field-input" name="role">
-          <option value="viewer" {% if row.role == "viewer" %}selected{% endif %}>viewer</option>
-          <option value="admin" {% if row.role == "admin" %}selected{% endif %}>admin</option>
-        </select>
-      </label>
-      <label class="field">
-        <span class="field-label">状态</span>
-        <span class="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm text-slate-700">
-          <input name="is_active" type="checkbox" value="1" {% if row.is_active %}checked{% endif %}>
-          启用
-        </span>
-      </label>
-    </div>
-    <div class="flex justify-end gap-2 border-t border-slate-200 px-4 py-4">
-      <a class="btn-secondary inline-flex items-center" href="/admin-users">取消</a>
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">只读账号</h3>
+        <p class="form-section-subtitle">账号用于登录和操作日志归属，不在编辑页修改。</p>
+      </div>
+
+      <div class="p-4">
+        <div class="read-only-strip">
+          <div class="read-only-item">
+            <div class="read-only-label">账号</div>
+            <div class="read-only-value mono">{{ row.username or "-" }}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <div class="form-section-heading">
+        <h3 class="form-section-title">权限状态</h3>
+        <p class="form-section-subtitle">调整用户角色和启停状态，不影响密码。</p>
+      </div>
+
+      <div class="form-grid form-grid-2">
+        <label class="field">
+          <span class="field-label">角色</span>
+          <select class="field-input" name="role">
+            <option value="viewer" {% if row.role == "viewer" %}selected{% endif %}>viewer</option>
+            <option value="admin" {% if row.role == "admin" %}selected{% endif %}>admin</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">状态</span>
+          <span class="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm text-slate-700">
+            <input name="is_active" type="checkbox" value="1" {% if row.is_active %}checked{% endif %}>
+            启用
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <a class="btn-secondary" href="/admin-users">取消</a>
       <button class="btn-primary" type="submit">保存</button>
     </div>
   </form>
+  </div>
 {% endblock %}
