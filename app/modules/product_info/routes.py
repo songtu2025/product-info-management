@@ -22,6 +22,7 @@ from app.modules.product_info.service import (
     bulk_update_product_lock_status,
     clear_product_list_cache,
     create_product,
+    export_products_for_import_to_xlsx,
     export_products_to_xlsx,
     get_filter_options,
     get_product_detail,
@@ -154,6 +155,8 @@ def product_list(
             "options": options,
             "export_url": "/products/export"
             + (f"?{request.url.query}" if request.url.query else ""),
+            "import_compatible_export_url": "/products/export/import-compatible"
+            + (f"?{request.url.query}" if request.url.query else ""),
             "create_url": "/products/new",
         },
     )
@@ -241,6 +244,35 @@ def product_export(
         content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="products_export.xlsx"'},
+    )
+
+
+@router.get("/products/export/import-compatible")
+def product_import_compatible_export(
+    q: str | None = None,
+    store_site: str | None = None,
+    brand: str | None = None,
+    sales_status: str | None = None,
+    listing: str | None = None,
+    listing_owner: str | None = None,
+    listing_owner_status: str | None = None,
+    project_group: str | None = None,
+):
+    filters = ProductFilters(
+        q=q,
+        store_site=store_site,
+        brand=brand,
+        sales_status=sales_status,
+        listing=listing,
+        listing_owner=listing_owner,
+        listing_owner_status=listing_owner_status,
+        project_group=project_group,
+        page=1,
+    )
+    return Response(
+        export_products_for_import_to_xlsx(filters),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="products_import_compatible.xlsx"'},
     )
 
 

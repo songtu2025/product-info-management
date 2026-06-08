@@ -322,6 +322,52 @@ def test_preview_product_import_rejects_locked_conflict(monkeypatch):
     assert preview["error_rows"][0]["message"] == "同一店铺站点 + SKU 下最多只能有一个锁仓 MSKU 为“锁”。"
 
 
+def test_preview_product_import_allows_unrelated_update_when_existing_lock_conflict(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    msku TEXT,
+                    sku TEXT,
+                    brand TEXT,
+                    msku_lock_status TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (id, store_site, msku, sku, brand, msku_lock_status)
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', 'SKU-001', 'Old Brand', '锁'),
+                    (2, 'SAYOLA:US', 'MSKU-002', 'SKU-001', 'Other Brand', '锁')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    content = build_workbook_bytes(
+        [
+            ["店铺/站点", "MSKU", "品牌", "锁仓MSKU"],
+            ["SAYOLA:US", "MSKU-001", "New Brand", "锁"],
+        ]
+    )
+
+    preview = preview_product_import(content)
+
+    assert preview["valid_count"] == 1
+    assert preview["error_count"] == 0
+    assert preview["valid_rows"][0]["changes"]["brand"] == "New Brand"
+    assert preview["valid_rows"][0]["change_items"] == [
+        {"field": "brand", "old": "Old Brand", "new": "New Brand"}
+    ]
+
+
 def test_product_import_page_renders_upload_form():
     response = client.get("/products/import")
 

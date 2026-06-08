@@ -105,6 +105,26 @@ EXPORT_COLUMNS = (
     ("sales_status", "销售状态"),
     ("updated_at", "更新时间"),
 )
+IMPORT_COMPATIBLE_EXPORT_COLUMNS = (
+    ("store_site", "店铺/站点"),
+    ("msku", "MSKU"),
+    ("asin", "ASIN"),
+    ("parent_asin", "父ASIN"),
+    ("product_name", "产品名称"),
+    ("sku", "SKU"),
+    ("brand", "品牌"),
+    ("fnsku", "FNSKU"),
+    ("sales_status", "销售状态"),
+    ("storage_type", "仓储类型"),
+    ("category_level_1", "一级品类"),
+    ("category_a", "品类A"),
+    ("category_b", "品类B"),
+    ("listing", "Listing"),
+    ("label_name", "标签名"),
+    ("msku_shipping_remark", "MSKU发货备注"),
+    ("transfer_remark", "借调备注"),
+    ("msku_lock_status", "锁仓MSKU"),
+)
 
 DEFAULT_EXPORT_FIELDS = tuple(field for field, _ in EXPORT_COLUMNS)
 EXPORT_COLUMN_MAP = {column["key"]: column["label"] for column in PRODUCT_ALL_COLUMNS}
@@ -277,6 +297,26 @@ def export_products_to_xlsx(
     sheet.append([header for _, header in export_columns])
     for row in rows:
         sheet.append([row.get(field) for field, _ in export_columns])
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_products_for_import_to_xlsx(filters: ProductFilters) -> bytes:
+    rows = list_products_for_export(
+        filters,
+        [field for field, _ in IMPORT_COMPATIBLE_EXPORT_COLUMNS],
+    )
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "产品信息导入模板"
+    sheet.append([header for _, header in IMPORT_COMPATIBLE_EXPORT_COLUMNS])
+    for row in rows:
+        if not row.get("store_site") or not row.get("msku"):
+            continue
+        sheet.append([row.get(field) for field, _ in IMPORT_COMPATIBLE_EXPORT_COLUMNS])
 
     output = BytesIO()
     workbook.save(output)

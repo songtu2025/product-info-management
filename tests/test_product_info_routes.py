@@ -275,6 +275,8 @@ def test_product_list_exposes_export_field_controls(monkeypatch):
     assert 'name="export_fields"' in response.text
     assert 'value="msku"' in response.text
     assert 'value="storage_type"' in response.text
+    assert 'href="/products/export/import-compatible"' in response.text
+    assert "导入兼容导出" in response.text
     assert 'src="http://testserver/static/js/product-list.js"' in response.text
 
 
@@ -749,3 +751,49 @@ def test_product_export_passes_filters_and_returns_xlsx(monkeypatch):
     assert captured["filters"].project_group == "GroupA"
     assert captured["filters"].page == 1
     assert captured["export_fields"] == ["msku", "storage_type"]
+
+
+def test_product_import_compatible_export_passes_filters_and_returns_xlsx(monkeypatch):
+    captured = {}
+
+    def fake_export_products(filters):
+        captured["filters"] = filters
+        return b"import-compatible-xlsx"
+
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.export_products_for_import_to_xlsx",
+        fake_export_products,
+        raising=False,
+    )
+
+    response = client.get(
+        "/products/export/import-compatible",
+        params={
+            "q": "abc",
+            "store_site": "SAYOLA:US",
+            "brand": "BrandA",
+            "sales_status": "在售",
+            "listing": "ListingA",
+            "listing_owner": "OwnerA",
+            "listing_owner_status": "Active",
+            "project_group": "GroupA",
+            "page": "4",
+            "export_fields": ["msku", "storage_type"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"import-compatible-xlsx"
+    assert response.headers["content-type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert "attachment;" in response.headers["content-disposition"]
+    assert captured["filters"].q == "abc"
+    assert captured["filters"].store_site == "SAYOLA:US"
+    assert captured["filters"].brand == "BrandA"
+    assert captured["filters"].sales_status == "在售"
+    assert captured["filters"].listing == "ListingA"
+    assert captured["filters"].listing_owner == "OwnerA"
+    assert captured["filters"].listing_owner_status == "Active"
+    assert captured["filters"].project_group == "GroupA"
+    assert captured["filters"].page == 1

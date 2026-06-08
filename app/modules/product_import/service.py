@@ -157,7 +157,15 @@ def preview_product_import(content: bytes) -> dict[str, Any]:
             }
         )
 
-    conflict_row_numbers = _find_lock_conflict_row_numbers(valid_rows)
+    lock_sensitive_rows = [
+        row
+        for row in valid_rows
+        if any(
+            item["field"] in {"sku", "msku_lock_status"}
+            for item in row["change_items"]
+        )
+    ]
+    conflict_row_numbers = _find_lock_conflict_row_numbers(lock_sensitive_rows)
     if conflict_row_numbers:
         valid_rows = [
             row

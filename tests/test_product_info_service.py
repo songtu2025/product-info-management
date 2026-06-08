@@ -18,6 +18,8 @@ from app.modules.product_info.service import (
     normalize_filters,
     update_product,
 )
+from app.modules.product_import.service import IMPORT_TEMPLATE_HEADERS, preview_product_import
+from app.modules.product_import import service as import_service
 from app.modules.store_site.service import UnknownStoreSiteError
 
 
@@ -627,6 +629,98 @@ def test_export_products_to_xlsx_uses_selected_safe_fields(monkeypatch):
 
     assert [cell.value for cell in sheet[1]] == ["MSKU", "仓储类型", "Listing 负责人", "项目组"]
     assert [cell.value for cell in sheet[2]] == ["MSKU-001", "FBA", "OwnerA", "GroupA"]
+
+
+def test_export_products_for_import_to_xlsx_matches_import_template_and_preview(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    msku TEXT,
+                    asin TEXT,
+                    store_site TEXT,
+                    parent_asin TEXT,
+                    product_name TEXT,
+                    sku TEXT,
+                    brand TEXT,
+                    fnsku TEXT,
+                    sales_status TEXT,
+                    storage_type TEXT,
+                    category_level_1 TEXT,
+                    category_a TEXT,
+                    category_b TEXT,
+                    listing TEXT,
+                    label_name TEXT,
+                    msku_shipping_remark TEXT,
+                    transfer_remark TEXT,
+                    msku_lock_status TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, store_site, msku, asin, parent_asin, product_name, sku,
+                    brand, fnsku, sales_status, storage_type, category_level_1,
+                    category_a, category_b, listing, label_name,
+                    msku_shipping_remark, transfer_remark, msku_lock_status, updated_at
+                )
+                VALUES (
+                    1, 'SAYOLA:US', 'MSKU-001', 'B001', 'PARENT1', 'Product 1', 'SKU-001',
+                    'BrandA', 'FNSKU-001', '在售', 'FBA', 'Sports',
+                    'A', 'B', 'RB833', 'LabelA',
+                    'Ship note', 'Transfer note', '', '2026-06-04'
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, store_site, msku, asin, product_name, sku, brand, updated_at
+                )
+                VALUES (2, 'SAYOLA:US', '', 'B002', 'Missing Key', 'SKU-002', 'BrandB', '2026-06-04')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    monkeypatch.setattr(import_service, "get_engine", lambda: engine)
+
+    content = service.export_products_for_import_to_xlsx(ProductFilters())
+    workbook = load_workbook(BytesIO(content))
+    sheet = workbook.active
+    preview = preview_product_import(content)
+
+    assert [cell.value for cell in sheet[1]] == list(IMPORT_TEMPLATE_HEADERS)
+    assert sheet.max_row == 2
+    assert preview["blocked_fields"] == []
+    assert preview["total_rows"] == 1
+    assert preview["valid_count"] == 1
+    assert preview["missing_product_count"] == 0
+    assert preview["error_count"] == 0
 
 
 def test_get_filter_options_reuses_cached_values(monkeypatch):
