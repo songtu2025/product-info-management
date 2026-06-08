@@ -80,6 +80,7 @@ def list_store_sites(q: str | None = None) -> list[dict[str, object]]:
     )
     with engine.connect() as conn:
         rows = [dict(row) for row in conn.execute(sql, params).mappings()]
+        _attach_relation_counts(conn, rows)
     if q is None:
         _store_site_list_cache.update(
             {
@@ -89,6 +90,86 @@ def list_store_sites(q: str | None = None) -> list[dict[str, object]]:
             }
         )
     return rows
+
+
+def _attach_relation_counts(conn, rows: list[dict[str, object]]) -> None:
+    for row in rows:
+        row["product_count"] = 0
+        row["owner_config_count"] = 0
+        row["missing_owner_product_count"] = 0
+    if not rows:
+        return
+
+    product_available = _table_available(conn, "amazon_product_info")
+    owner_available = _table_available(conn, "amazon_listing_owner_config")
+    if product_available:
+        _merge_counts(
+            rows,
+            conn.execute(
+                text(
+                    """
+                    SELECT store_site, COUNT(*) AS count
+                    FROM amazon_product_info
+                    WHERE store_site IS NOT NULL AND TRIM(store_site) <> ''
+                    GROUP BY store_site
+                    """
+                )
+            ).mappings(),
+            "product_count",
+        )
+    if owner_available:
+        _merge_counts(
+            rows,
+            conn.execute(
+                text(
+                    """
+                    SELECT store_site, COUNT(*) AS count
+                    FROM amazon_listing_owner_config
+                    WHERE store_site IS NOT NULL AND TRIM(store_site) <> ''
+                    GROUP BY store_site
+                    """
+                )
+            ).mappings(),
+            "owner_config_count",
+        )
+    if product_available and owner_available:
+        _merge_counts(
+            rows,
+            conn.execute(
+                text(
+                    """
+                    SELECT p.store_site, COUNT(*) AS count
+                    FROM amazon_product_info p
+                    LEFT JOIN amazon_listing_owner_config lo
+                      ON p.store_site = lo.store_site
+                     AND p.listing = lo.listing
+                    WHERE p.store_site IS NOT NULL
+                      AND TRIM(p.store_site) <> ''
+                      AND p.listing IS NOT NULL
+                      AND TRIM(p.listing) <> ''
+                      AND lo.id IS NULL
+                    GROUP BY p.store_site
+                    """
+                )
+            ).mappings(),
+            "missing_owner_product_count",
+        )
+
+
+def _merge_counts(rows: list[dict[str, object]], count_rows, field: str) -> None:
+    rows_by_store_site = {row["store_site"]: row for row in rows}
+    for count_row in count_rows:
+        row = rows_by_store_site.get(count_row["store_site"])
+        if row is not None:
+            row[field] = count_row["count"]
+
+
+def _table_available(conn, table_name: str) -> bool:
+    try:
+        conn.execute(text(f"SELECT 1 FROM {table_name} LIMIT 1")).first()
+        return True
+    except SQLAlchemyError:
+        return False
 
 
 def clear_store_site_list_cache() -> None:
