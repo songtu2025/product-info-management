@@ -71,6 +71,9 @@ def test_login_page_is_public(monkeypatch):
 
     assert response.status_code == 200
     assert "登录" in response.text
+    assert "https://cdn.tailwindcss.com" not in response.text
+    assert 'href="http://testserver/static/css/tailwind-lite.css"' in response.text
+    assert 'href="http://testserver/static/css/app.css"' in response.text
 
 
 def test_unauthenticated_backend_redirects_to_login(monkeypatch):

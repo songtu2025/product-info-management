@@ -1,9 +1,22 @@
+import json
+import re
+
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 
 client = TestClient(app)
+
+
+def _product_list_config(response):
+    match = re.search(
+        r'<script id="product-list-config" type="application/json">\s*(.*?)\s*</script>',
+        response.text,
+        re.S,
+    )
+    assert match is not None
+    return json.loads(match.group(1))
 
 
 def test_product_list_renders_rows_and_pagination(monkeypatch):
@@ -168,7 +181,8 @@ def test_product_list_uses_lightweight_table_columns(monkeypatch):
 
     assert response.status_code == 200
     assert "字段设置" in response.text
-    assert "productListColumnState" in response.text
+    assert 'src="http://testserver/static/js/product-list.js"' in response.text
+    assert '"storageKey": "productListColumnState"' in response.text
 
     visible_columns = [
         "msku",
@@ -215,7 +229,7 @@ def test_product_list_uses_lightweight_table_columns(monkeypatch):
     assert "data-column-order-down" not in response.text
     assert 'data-default-visible="false"' not in response.text
     assert 'draggable="true"' in response.text
-    assert "autoFitColumnWidths" in response.text
+    assert "autoFitColumnWidths" not in response.text
     assert "min-width: 1120px" not in response.text
 
 
@@ -261,7 +275,7 @@ def test_product_list_exposes_export_field_controls(monkeypatch):
     assert 'name="export_fields"' in response.text
     assert 'value="msku"' in response.text
     assert 'value="storage_type"' in response.text
-    assert "buildExportUrl" in response.text
+    assert 'src="http://testserver/static/js/product-list.js"' in response.text
 
 
 def test_product_list_passes_search_and_filter_params(monkeypatch):
@@ -484,9 +498,12 @@ def test_product_list_loads_saved_column_state(monkeypatch):
             ),
         )
     ]
-    assert "serverColumnState" in response.text
-    assert '"visible": {"id": true}' in response.text
-    assert '"order": ["id", "msku"]' in response.text
+    config = _product_list_config(response)
+    assert config["columnState"] == {
+        "visible": {"id": True},
+        "order": ["id", "msku"],
+        "widths": {"id": 88},
+    }
 
 
 def test_product_list_loads_saved_export_fields(monkeypatch):
@@ -520,7 +537,8 @@ def test_product_list_loads_saved_export_fields(monkeypatch):
             ),
         )
     ]
-    assert 'const savedExportFields = ["msku", "storage_type"];' in response.text
+    config = _product_list_config(response)
+    assert config["savedExportFields"] == ["msku", "storage_type"]
 
 
 def test_product_list_loads_saved_filter_views(monkeypatch):
@@ -570,7 +588,18 @@ def test_product_list_loads_saved_filter_views(monkeypatch):
     assert "常用筛选" in response.text
     assert "在售 OwnerA" in response.text
     assert "sales_status=%E5%9C%A8%E5%94%AE&amp;listing_owner=OwnerA&amp;page_size=100" in response.text
-    assert "filterViewState" in response.text
+    config = _product_list_config(response)
+    assert config["filterViewState"] == [
+        {
+            "name": "在售 OwnerA",
+            "filters": {
+                "sales_status": "在售",
+                "listing_owner": "OwnerA",
+                "page_size": 100,
+            },
+            "url": "/?sales_status=%E5%9C%A8%E5%94%AE&listing_owner=OwnerA&page_size=100",
+        }
+    ]
 
 
 def test_product_column_preference_save_persists_for_current_user(monkeypatch):

@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from pathlib import Path
 
 from app.core.config import get_settings
 from app.main import app
@@ -26,6 +27,41 @@ def test_home_page_renders_admin_shell(monkeypatch):
     assert "Listing 负责人" in response.text
     assert 'data-app-content' in response.text
     assert 'data-partial-nav' in response.text
+    assert "https://cdn.tailwindcss.com" not in response.text
+    assert 'href="http://testserver/static/css/tailwind-lite.css"' in response.text
+    assert 'href="http://testserver/static/css/app.css"' in response.text
+    assert 'src="http://testserver/static/js/partial-nav.js"' in response.text
+
+
+def test_tailwind_cdn_is_replaced_by_local_utility_css():
+    tailwind_lite = Path("app/static/css/tailwind-lite.css")
+
+    assert tailwind_lite.exists()
+
+    css = tailwind_lite.read_text(encoding="utf-8")
+    for selector in [
+        ".flex",
+        ".grid",
+        ".hidden",
+        ".min-h-screen",
+        ".text-slate-900",
+        ".px-5",
+        ".py-5",
+        ".md\\:grid-cols-3",
+        ".lg\\:grid-cols-7",
+        ".lg\\:block",
+    ]:
+        assert selector in css
+
+
+def test_frontend_behavior_uses_static_javascript_files():
+    partial_nav = Path("app/static/js/partial-nav.js")
+    product_list = Path("app/static/js/product-list.js")
+
+    assert partial_nav.exists()
+    assert product_list.exists()
+    assert "x-partial-request" in partial_nav.read_text(encoding="utf-8")
+    assert "product-list-config" in product_list.read_text(encoding="utf-8")
 
 
 def test_health_endpoint_returns_ok():

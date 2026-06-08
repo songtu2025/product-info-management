@@ -1,4 +1,6 @@
 .env
 *.log
+uvicorn-*.log
+uvicorn-*.pid
 __pycache__/
 .pytest_cache/
