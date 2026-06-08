@@ -6,8 +6,13 @@
     return;
   }
 
+  let latestRequestId = 0;
   const sameOrigin = (url) => url.origin === window.location.origin;
   const shouldUsePartial = (url) => sameOrigin(url) && !url.hash && !url.pathname.startsWith("/logout");
+  const isHtmlResponse = (response) => {
+    const contentType = response.headers.get("content-type") || "";
+    return contentType.includes("text/html");
+  };
 
   const refreshActiveNav = (url, label) => {
     navLinks.forEach((link) => {
@@ -32,15 +37,23 @@
   };
 
   const loadPartial = async (url, label, pushState = true) => {
+    const requestId = ++latestRequestId;
     const response = await fetch(url, {
       headers: {"x-partial-request": "1"},
       credentials: "same-origin",
     });
-    if (!response.ok || response.redirected) {
+    if (requestId !== latestRequestId) {
+      return;
+    }
+    if (!response.ok || response.redirected || !isHtmlResponse(response)) {
       window.location.href = url.toString();
       return;
     }
-    content.innerHTML = await response.text();
+    const html = await response.text();
+    if (requestId !== latestRequestId) {
+      return;
+    }
+    content.innerHTML = html;
     runEmbeddedScripts();
     refreshActiveNav(url, label);
     if (pushState) {

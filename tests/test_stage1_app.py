@@ -57,11 +57,21 @@ def test_tailwind_cdn_is_replaced_by_local_utility_css():
 def test_frontend_behavior_uses_static_javascript_files():
     partial_nav = Path("app/static/js/partial-nav.js")
     product_list = Path("app/static/js/product-list.js")
+    partial_nav_js = partial_nav.read_text(encoding="utf-8")
 
     assert partial_nav.exists()
     assert product_list.exists()
-    assert "x-partial-request" in partial_nav.read_text(encoding="utf-8")
+    assert "x-partial-request" in partial_nav_js
     assert "product-list-config" in product_list.read_text(encoding="utf-8")
+
+
+def test_partial_navigation_guards_downloads_and_stale_responses():
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+
+    assert "content-type" in partial_nav_js
+    assert "text/html" in partial_nav_js
+    assert "latestRequestId" in partial_nav_js
+    assert "requestId !== latestRequestId" in partial_nav_js
 
 
 def test_health_endpoint_returns_ok():
