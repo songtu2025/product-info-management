@@ -691,6 +691,54 @@ textarea {
   padding: 14px;
 }
 
+.import-change-list {
+  display: grid;
+  gap: 8px;
+  min-width: 260px;
+  white-space: normal;
+}
+
+.import-change-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 7px 9px;
+}
+
+.import-change-field {
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.import-change-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.import-change-label {
+  margin-right: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.import-change-old {
+  color: var(--text-muted);
+}
+
+.import-change-new {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.import-change-arrow {
+  color: var(--text-soft);
+}
+
 .list-panel-tools {
   display: flex;
   flex-direction: column;

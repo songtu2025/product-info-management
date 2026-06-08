@@ -393,6 +393,13 @@ def test_product_import_preview_renders_result(monkeypatch):
     assert "校验结果" in response.text
     assert "校验通过，可确认写入数据库。" in response.text
     assert "MSKU-001" in response.text
+    assert "import-change-list" in response.text
+    assert "import-change-item" in response.text
+    assert "import-change-field" in response.text
+    assert "import-change-old" in response.text
+    assert "import-change-new" in response.text
+    assert "原值" in response.text
+    assert "新值" in response.text
     assert "Old Brand" in response.text
     assert "New Brand" in response.text
     assert "name=\"import_token\"" in response.text

@@ -123,13 +123,32 @@
                   <td class="table-cell">{{ row.store_site }}</td>
                   <td class="table-cell mono">{{ row.msku }}</td>
                   <td class="table-cell">
-                    {% for item in row.change_items %}
-                      <span class="mr-2 inline-block">{{ item.field }}：{{ item.old or "-" }} -> {{ item.new or "-" }}</span>
-                    {% else %}
-                      {% for field, value in row.changes.items() %}
-                        <span class="mr-2 inline-block">{{ field }}={{ value }}</span>
+                    <div class="import-change-list">
+                      {% for item in row.change_items %}
+                        <div class="import-change-item">
+                          <span class="import-change-field">{{ item.field }}</span>
+                          <span class="import-change-value import-change-old">
+                            <span class="import-change-label">原值</span>
+                            {{ item.old or "-" }}
+                          </span>
+                          <span class="import-change-arrow">-&gt;</span>
+                          <span class="import-change-value import-change-new">
+                            <span class="import-change-label">新值</span>
+                            {{ item.new or "-" }}
+                          </span>
+                        </div>
+                      {% else %}
+                        {% for field, value in row.changes.items() %}
+                          <div class="import-change-item">
+                            <span class="import-change-field">{{ field }}</span>
+                            <span class="import-change-value import-change-new">
+                              <span class="import-change-label">新值</span>
+                              {{ value or "-" }}
+                            </span>
+                          </div>
+                        {% endfor %}
                       {% endfor %}
-                    {% endfor %}
+                    </div>
                   </td>
                 </tr>
               {% else %}
