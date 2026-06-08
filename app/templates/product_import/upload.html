@@ -40,6 +40,20 @@
         {% if commit_result.success %}
           ，更新 {{ commit_result.updated_count }} 行，跳过 {{ commit_result.skipped_count }} 行。
         {% endif %}
+        <div class="mt-3 flex flex-wrap gap-2">
+          {% if commit_result.success %}
+            <a class="btn-secondary" href="/">查看产品列表</a>
+            {% if import_log_url %}
+              <a class="btn-secondary" href="{{ import_log_url }}">查看本次导入日志</a>
+            {% endif %}
+            <a class="btn-secondary" href="/products/import">继续导入</a>
+          {% else %}
+            {% if import_token and preview and (preview.missing_product_count > 0 or preview.error_count > 0) %}
+              <a class="btn-secondary" href="/products/import/issues?import_token={{ import_token }}">下载错误明细</a>
+            {% endif %}
+            <a class="btn-secondary" href="/products/import">重新上传</a>
+          {% endif %}
+        </div>
       </div>
     {% endif %}
 

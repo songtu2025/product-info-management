@@ -466,4 +466,46 @@ def test_product_import_commit_route_renders_result(monkeypatch):
     assert response.status_code == 200
     assert "写入完成" in response.text
     assert "更新 2 行" in response.text
+    assert 'href="/"' in response.text
+    assert "查看产品列表" in response.text
+    assert (
+        "/operation-logs?table_name=amazon_product_info&amp;operation_type=IMPORT_UPDATE&amp;changed_by=test-admin"
+        in response.text
+    )
+    assert "查看本次导入日志" in response.text
+    assert 'href="/products/import"' in response.text
+    assert "继续导入" in response.text
     assert captured == {"content": b"xlsx", "changed_by": "test-admin"}
+
+
+def test_product_import_commit_failure_keeps_issue_download_and_retry(monkeypatch):
+    monkeypatch.setattr("app.modules.product_import.routes.load_import_upload", lambda token: b"xlsx")
+
+    def fake_commit_product_import(content, changed_by="system"):
+        return {
+            "success": False,
+            "updated_count": 0,
+            "skipped_count": 0,
+            "message": "校验未通过，未写入数据库。",
+            "preview": {
+                "total_rows": 1,
+                "valid_count": 0,
+                "missing_product_count": 0,
+                "error_count": 1,
+                "blocked_fields": [],
+                "valid_rows": [],
+                "missing_product_rows": [],
+                "error_rows": [{"row_number": 2, "message": "缺少店铺站点或 MSKU"}],
+            },
+        }
+
+    monkeypatch.setattr("app.modules.product_import.routes.commit_product_import", fake_commit_product_import)
+
+    response = client.post("/products/import/commit", data={"import_token": "token-1"})
+
+    assert response.status_code == 200
+    assert "校验未通过，未写入数据库。" in response.text
+    assert "/products/import/issues?import_token=token-1" in response.text
+    assert "下载错误明细" in response.text
+    assert 'href="/products/import"' in response.text
+    assert "重新上传" in response.text

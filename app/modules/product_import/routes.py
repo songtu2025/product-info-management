@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
@@ -29,6 +31,7 @@ def product_import_page(request: Request):
             "preview": None,
             "error": None,
             "import_token": None,
+            "import_log_url": None,
             "commit_result": None,
         },
     )
@@ -86,6 +89,7 @@ async def product_import_preview(request: Request, file: UploadFile = File(...))
             "preview": preview,
             "error": error,
             "import_token": import_token,
+            "import_log_url": None,
             "commit_result": None,
         },
     )
@@ -105,6 +109,7 @@ async def product_import_commit(request: Request, import_token: str = Form(...))
     else:
         commit_result = commit_product_import(content, changed_by=user.username)
 
+    next_import_token = import_token if content is not None and not commit_result.get("success") else None
     return templates.TemplateResponse(
         request,
         "product_import/upload.html",
@@ -113,7 +118,18 @@ async def product_import_commit(request: Request, import_token: str = Form(...))
             "active_nav": "数据导入",
             "preview": commit_result.get("preview"),
             "error": None,
-            "import_token": None,
+            "import_token": next_import_token,
+            "import_log_url": _import_log_url(user.username) if commit_result.get("success") else None,
             "commit_result": commit_result,
         },
+    )
+
+
+def _import_log_url(username: str) -> str:
+    return "/operation-logs?" + urlencode(
+        {
+            "table_name": "amazon_product_info",
+            "operation_type": "IMPORT_UPDATE",
+            "changed_by": username,
+        }
     )
