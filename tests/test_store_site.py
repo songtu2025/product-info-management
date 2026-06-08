@@ -49,7 +49,7 @@ def test_store_site_list_renders_rows(monkeypatch):
     assert "缺负责人 1" in response.text
     assert "/?store_site=SAYOLA%3AUS" in response.text
     assert "/listing-owners?q=SAYOLA%3AUS" in response.text
-    assert "/data-quality" in response.text
+    assert "/data-quality?store_site=SAYOLA%3AUS" in response.text
     assert "日志" in response.text
     assert "/operation-logs?table_name=amazon_store_site&amp;record_id=1" in response.text
 

@@ -26,41 +26,61 @@ RELATION_RULES = (
 )
 
 
-def get_product_quality_report() -> dict[str, object]:
+def get_product_quality_report(store_site: str | None = None) -> dict[str, object]:
+    store_site = _normalize_store_site(store_site)
     engine = get_engine()
     if engine is None:
         return _build_report(0, _empty_field_issues(), _empty_relation_issues())
     now = monotonic()
     engine_id = id(engine)
-    if (
+    if store_site is None and (
         _quality_report_cache["engine_id"] == engine_id
         and _quality_report_cache["value"] is not None
         and now < _quality_report_cache["expires_at"]
     ):
         return _quality_report_cache["value"]
 
-    total_sql = text("SELECT COUNT(*) FROM amazon_product_info")
+    store_site_params = _store_site_params(store_site)
+    product_store_site_filter = _store_site_filter("p", store_site)
+    total_sql = text(
+        f"""
+        SELECT COUNT(*)
+        FROM amazon_product_info p
+        WHERE 1 = 1
+        {product_store_site_filter}
+        """
+    )
 
     with engine.connect() as conn:
-        total = conn.execute(total_sql).scalar_one()
+        total = conn.execute(total_sql, store_site_params).scalar_one()
         field_issues = []
         for key, label, field in QUALITY_RULES:
-            where_sql = f"{field} IS NULL OR TRIM({field}) = ''"
+            where_sql = f"(p.{field} IS NULL OR TRIM(p.{field}) = '')"
             count = conn.execute(
-                text(f"SELECT COUNT(*) FROM amazon_product_info WHERE {where_sql}")
+                text(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM amazon_product_info p
+                    WHERE {where_sql}
+                    {product_store_site_filter}
+                    """
+                ),
+                store_site_params,
             ).scalar_one()
             rows = [
                 dict(row)
                 for row in conn.execute(
                     text(
                         f"""
-                        SELECT id, store_site, msku, product_name
-                        FROM amazon_product_info
+                        SELECT p.id, p.store_site, p.msku, p.product_name
+                        FROM amazon_product_info p
                         WHERE {where_sql}
+                        {product_store_site_filter}
                         ORDER BY updated_at DESC, id DESC
                         LIMIT 20
                         """
-                    )
+                    ),
+                    store_site_params,
                 ).mappings()
             ]
             field_issues.append(
@@ -72,16 +92,17 @@ def get_product_quality_report() -> dict[str, object]:
                     "rows": rows,
                 }
             )
-        relation_issues = _get_relation_issues(conn)
+        relation_issues = _get_relation_issues(conn, store_site)
 
     report = _build_report(total, field_issues, relation_issues)
-    _quality_report_cache.update(
-        {
-            "engine_id": engine_id,
-            "expires_at": now + QUALITY_REPORT_CACHE_TTL_SECONDS,
-            "value": report,
-        }
-    )
+    if store_site is None:
+        _quality_report_cache.update(
+            {
+                "engine_id": engine_id,
+                "expires_at": now + QUALITY_REPORT_CACHE_TTL_SECONDS,
+                "value": report,
+            }
+        )
     return report
 
 
@@ -115,23 +136,23 @@ def build_quality_issue_workbook(report: dict[str, object]) -> bytes:
     return output.getvalue()
 
 
-def _get_relation_issues(conn) -> list[dict[str, object]]:
+def _get_relation_issues(conn, store_site: str | None = None) -> list[dict[str, object]]:
     issues = []
     has_listing_owner_table = _listing_owner_table_available(conn)
     if has_listing_owner_table:
-        issues.extend(_get_listing_owner_relation_issues(conn))
+        issues.extend(_get_listing_owner_relation_issues(conn, store_site))
     else:
         issues.extend(_empty_listing_owner_relation_issues())
 
     if _store_site_table_available(conn):
-        issues.extend(_get_store_site_relation_issues(conn, has_listing_owner_table))
+        issues.extend(_get_store_site_relation_issues(conn, has_listing_owner_table, store_site))
     else:
         issues.extend(_empty_store_site_relation_issues())
 
     return issues
 
 
-def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
+def _get_listing_owner_relation_issues(conn, store_site: str | None = None) -> list[dict[str, object]]:
     missing_where = """
         p.listing IS NOT NULL
         AND TRIM(p.listing) <> ''
@@ -140,6 +161,9 @@ def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
     orphan_where = """
         p.id IS NULL
     """
+    params = _store_site_params(store_site)
+    product_store_site_filter = _store_site_filter("p", store_site)
+    owner_store_site_filter = _store_site_filter("lo", store_site)
     missing_count = conn.execute(
         text(
             f"""
@@ -149,8 +173,10 @@ def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
               ON p.store_site = lo.store_site
              AND p.listing = lo.listing
             WHERE {missing_where}
+            {product_store_site_filter}
             """
-        )
+        ),
+        params,
     ).scalar_one()
     missing_rows = [
         dict(row)
@@ -163,10 +189,12 @@ def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
                   ON p.store_site = lo.store_site
                  AND p.listing = lo.listing
                 WHERE {missing_where}
+                {product_store_site_filter}
                 ORDER BY p.updated_at DESC, p.id DESC
                 LIMIT 20
                 """
-            )
+            ),
+            params,
         ).mappings()
     ]
 
@@ -179,8 +207,10 @@ def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
               ON p.store_site = lo.store_site
              AND p.listing = lo.listing
             WHERE {orphan_where}
+            {owner_store_site_filter}
             """
-        )
+        ),
+        params,
     ).scalar_one()
     orphan_rows = [
         dict(row)
@@ -193,10 +223,12 @@ def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
                   ON p.store_site = lo.store_site
                  AND p.listing = lo.listing
                 WHERE {orphan_where}
+                {owner_store_site_filter}
                 ORDER BY lo.id DESC
                 LIMIT 20
                 """
-            )
+            ),
+            params,
         ).mappings()
     ]
 
@@ -218,7 +250,11 @@ def _get_listing_owner_relation_issues(conn) -> list[dict[str, object]]:
     ]
 
 
-def _get_store_site_relation_issues(conn, has_listing_owner_table: bool) -> list[dict[str, object]]:
+def _get_store_site_relation_issues(
+    conn,
+    has_listing_owner_table: bool,
+    store_site: str | None = None,
+) -> list[dict[str, object]]:
     unknown_product_where = """
         p.store_site IS NOT NULL
         AND TRIM(p.store_site) <> ''
@@ -229,6 +265,9 @@ def _get_store_site_relation_issues(conn, has_listing_owner_table: bool) -> list
         AND TRIM(lo.store_site) <> ''
         AND ss.id IS NULL
     """
+    params = _store_site_params(store_site)
+    product_store_site_filter = _store_site_filter("p", store_site)
+    owner_store_site_filter = _store_site_filter("lo", store_site)
     unknown_product_count = conn.execute(
         text(
             f"""
@@ -237,8 +276,10 @@ def _get_store_site_relation_issues(conn, has_listing_owner_table: bool) -> list
             LEFT JOIN amazon_store_site ss
               ON p.store_site = ss.store_site
             WHERE {unknown_product_where}
+            {product_store_site_filter}
             """
-        )
+        ),
+        params,
     ).scalar_one()
     unknown_product_rows = [
         dict(row)
@@ -250,10 +291,12 @@ def _get_store_site_relation_issues(conn, has_listing_owner_table: bool) -> list
                 LEFT JOIN amazon_store_site ss
                   ON p.store_site = ss.store_site
                 WHERE {unknown_product_where}
+                {product_store_site_filter}
                 ORDER BY p.updated_at DESC, p.id DESC
                 LIMIT 20
                 """
-            )
+            ),
+            params,
         ).mappings()
     ]
 
@@ -268,8 +311,10 @@ def _get_store_site_relation_issues(conn, has_listing_owner_table: bool) -> list
                 LEFT JOIN amazon_store_site ss
                   ON lo.store_site = ss.store_site
                 WHERE {unknown_owner_where}
+                {owner_store_site_filter}
                 """
-            )
+            ),
+            params,
         ).scalar_one()
         unknown_owner_rows = [
             dict(row)
@@ -281,10 +326,12 @@ def _get_store_site_relation_issues(conn, has_listing_owner_table: bool) -> list
                     LEFT JOIN amazon_store_site ss
                       ON lo.store_site = ss.store_site
                     WHERE {unknown_owner_where}
+                    {owner_store_site_filter}
                     ORDER BY lo.id DESC
                     LIMIT 20
                     """
-                )
+                ),
+                params,
             ).mappings()
         ]
 
@@ -320,6 +367,21 @@ def _store_site_table_available(conn) -> bool:
         return True
     except SQLAlchemyError:
         return False
+
+
+def _normalize_store_site(store_site: str | None) -> str | None:
+    if store_site is None:
+        return None
+    store_site = store_site.strip()
+    return store_site or None
+
+
+def _store_site_params(store_site: str | None) -> dict[str, str]:
+    return {"store_site": store_site} if store_site else {}
+
+
+def _store_site_filter(alias: str, store_site: str | None) -> str:
+    return f"AND {alias}.store_site = :store_site" if store_site else ""
 
 
 def _empty_issues() -> list[dict[str, object]]:

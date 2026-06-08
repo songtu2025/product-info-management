@@ -24,7 +24,13 @@
       <p class="quality-copy">
         共 {{ report.total }} 条产品。当前只做只读检查，不修改任何数据。
       </p>
-      <a class="btn-secondary mt-3 inline-flex items-center" href="/data-quality/export">导出问题清单</a>
+      {% if store_site %}
+        <p class="quality-copy">
+          当前店铺站点：{{ store_site }}
+          <a class="action-link" href="/data-quality">清除筛选</a>
+        </p>
+      {% endif %}
+      <a class="btn-secondary mt-3 inline-flex items-center" href="/data-quality/export{% if store_site %}?store_site={{ store_site|urlencode }}{% endif %}">导出问题清单</a>
     </div>
     <div class="quality-stat-grid">
       <div class="quality-stat">

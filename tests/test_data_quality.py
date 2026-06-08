@@ -298,6 +298,66 @@ def test_get_product_quality_report_counts_unknown_store_site_references(monkeyp
     ]
 
 
+def test_get_product_quality_report_filters_by_store_site(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        create_product_table(conn)
+        create_listing_owner_table(conn)
+        create_store_site_table(conn)
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_store_site (id, store_site)
+                VALUES
+                    (1, 'SAYOLA:US'),
+                    (2, 'RIVBOS:CA')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, store_site, msku, asin, listing, brand, sales_status, product_name, updated_at
+                )
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', NULL, 'L1', 'BrandA', '在售', 'Product 1', '2026-06-01'),
+                    (2, 'RIVBOS:CA', 'MSKU-002', NULL, 'L2', 'BrandA', '在售', 'Product 2', '2026-06-02'),
+                    (3, 'UNKNOWN:US', 'MSKU-003', 'B003', 'L3', 'BrandA', '在售', 'Product 3', '2026-06-03')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (id, store_site, listing, owner)
+                VALUES
+                    (1, 'SAYOLA:US', 'L404', 'Alice'),
+                    (2, 'RIVBOS:CA', 'L404', 'Bob'),
+                    (3, 'UNKNOWN:US', 'L3', 'Chris')
+                """
+            )
+        )
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_quality_report_cache()
+
+    report = get_product_quality_report(store_site="SAYOLA:US")
+    issues = {issue["key"]: issue for issue in report["issues"]}
+
+    assert report["total"] == 1
+    assert issues["missing_asin"]["count"] == 1
+    assert issues["missing_asin"]["rows"] == [
+        {"id": 1, "store_site": "SAYOLA:US", "msku": "MSKU-001", "product_name": "Product 1"}
+    ]
+    assert issues["orphan_listing_owner_config"]["count"] == 1
+    assert issues["orphan_listing_owner_config"]["rows"] == [
+        {"id": 1, "store_site": "SAYOLA:US", "listing": "L404", "owner": "Alice"}
+    ]
+    assert issues["unknown_product_store_site"]["count"] == 0
+    assert issues["unknown_listing_owner_store_site"]["count"] == 0
+
+
 def test_build_quality_issue_workbook_exports_issue_rows(monkeypatch):
     report = {
         "total": 1,
@@ -572,3 +632,28 @@ def test_data_quality_page_uses_workbench_layout(monkeypatch):
     assert "业务关系健康" in response.text
     assert "优先处理" in response.text
     assert "已通过" in response.text
+
+
+def test_data_quality_page_passes_store_site_filter(monkeypatch):
+    captured = {}
+
+    def fake_get_product_quality_report(store_site=None):
+        captured["store_site"] = store_site
+        return {
+            "total": 1,
+            "issues": [],
+            "field_issues": [],
+            "relation_issues": [],
+        }
+
+    monkeypatch.setattr(
+        "app.modules.data_quality.routes.get_product_quality_report",
+        fake_get_product_quality_report,
+    )
+
+    response = client.get("/data-quality?store_site=SAYOLA%3AUS")
+
+    assert response.status_code == 200
+    assert captured["store_site"] == "SAYOLA:US"
+    assert "当前店铺站点：SAYOLA:US" in response.text
+    assert 'href="/data-quality"' in response.text

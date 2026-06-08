@@ -54,7 +54,7 @@
               </td>
               <td class="table-cell">
                 {% if row.missing_owner_product_count %}
-                  <a class="status-badge" href="/data-quality">缺负责人 {{ row.missing_owner_product_count }}</a>
+                  <a class="status-badge" href="/data-quality?store_site={{ row.store_site|urlencode }}">缺负责人 {{ row.missing_owner_product_count }}</a>
                 {% else %}
                   <span class="status-badge status-badge-muted">关系正常</span>
                 {% endif %}
