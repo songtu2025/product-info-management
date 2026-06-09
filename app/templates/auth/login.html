@@ -8,13 +8,18 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
   </head>
   <body class="min-h-screen bg-slate-50 text-slate-900">
-    <main class="flex min-h-screen items-center justify-center px-5">
-      <form class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm" method="post">
-        <h1 class="text-lg font-semibold text-slate-950">登录</h1>
-        <p class="mt-1 text-sm text-slate-500">{{ app_name }}</p>
+    <main class="login-shell account-login-shell">
+      <form class="account-login-panel" method="post">
+        <div class="account-login-brand">
+          <div class="brand-mark">AO</div>
+          <div>
+            <h1 class="account-login-title">登录</h1>
+            <p class="account-login-subtitle">{{ app_name }}</p>
+          </div>
+        </div>
 
         {% if error %}
-          <div class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div class="account-login-error" role="alert">
             {{ error }}
           </div>
         {% endif %}

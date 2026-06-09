@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 
 from app.main import app
 from app.modules.data_quality import service
@@ -358,6 +360,53 @@ def test_get_product_quality_report_filters_by_store_site(monkeypatch):
     assert issues["unknown_listing_owner_store_site"]["count"] == 0
 
 
+def test_get_product_quality_summary_counts_issues_with_single_query(monkeypatch):
+    engine = create_engine("sqlite://")
+    statements = []
+    with engine.begin() as conn:
+        create_product_table(conn)
+        create_listing_owner_table(conn)
+        create_store_site_table(conn)
+        conn.execute(text("INSERT INTO amazon_store_site (id, store_site) VALUES (1, 'SAYOLA:US')"))
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, store_site, msku, asin, listing, brand, sales_status, product_name, updated_at
+                )
+                VALUES
+                    (1, 'SAYOLA:US', 'MSKU-001', NULL, 'L1', '', NULL, '', '2026-06-01'),
+                    (2, 'SAYOLA:US', 'MSKU-002', 'B002', 'L2', 'BrandA', '在售', 'Product 2', '2026-06-02'),
+                    (3, 'UNKNOWN:US', 'MSKU-003', 'B003', 'L3', 'BrandA', '在售', 'Product 3', '2026-06-03')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (id, store_site, listing, owner)
+                VALUES
+                    (1, 'SAYOLA:US', 'L1', 'Alice'),
+                    (2, 'SAYOLA:US', 'L404', 'Bob'),
+                    (3, 'UNKNOWN:US', 'L3', 'Chris')
+                """
+            )
+        )
+
+    def record_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(" ".join(statement.split()))
+
+    event.listen(engine, "before_cursor_execute", record_statement)
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_quality_report_cache()
+
+    summary = service.get_product_quality_summary()
+
+    event.remove(engine, "before_cursor_execute", record_statement)
+    assert summary == {"total": 3, "quality_issue_total": 8}
+    assert len(statements) == 1
+
+
 def test_build_quality_issue_workbook_exports_issue_rows(monkeypatch):
     report = {
         "total": 1,
@@ -625,13 +674,27 @@ def test_data_quality_page_uses_workbench_layout(monkeypatch):
     response = client.get("/data-quality")
 
     assert response.status_code == 200
-    assert 'class="quality-workbench"' in response.text
+    assert 'class="ops-workbench quality-workbench"' in response.text
     assert "检查项概览" in response.text
     assert "问题明细" in response.text
     assert "字段完整性" in response.text
     assert "业务关系健康" in response.text
     assert "优先处理" in response.text
     assert "已通过" in response.text
+
+
+def test_data_quality_page_uses_layered_operational_layout():
+    template = Path("app/templates/data_quality/index.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "ops-workbench quality-workbench" in template
+    assert "quality-summary-panel" in template
+    assert "quality-overview-panel" in template
+    assert "quality-issue-panel" in template
+    assert "ops-list-table quality-detail-table" in template
+    assert ".quality-workbench.ops-workbench" in app_css
+    assert ".quality-overview-panel" in app_css
+    assert ".quality-issue-panel" in app_css
 
 
 def test_data_quality_page_passes_store_site_filter(monkeypatch):

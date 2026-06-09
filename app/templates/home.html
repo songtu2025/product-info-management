@@ -1,50 +1,52 @@
 {% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% block content %}
-  <div class="mb-4 grid gap-3 md:grid-cols-3">
-    <div class="metric-panel">
-      <div class="metric-label">当前阶段</div>
-      <div class="metric-value">基础后台骨架</div>
-    </div>
-    <div class="metric-panel">
-      <div class="metric-label">核心数据表</div>
-      <div class="metric-value">3 张</div>
-    </div>
-    <div class="metric-panel">
-      <div class="metric-label">默认分页</div>
-      <div class="metric-value">50 行</div>
-    </div>
-  </div>
-
-  <div class="content-panel">
-    <div class="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h2 class="text-base font-semibold text-slate-950">产品信息</h2>
-        <p class="mt-1 text-sm text-slate-500">下一阶段接入 amazon_product_info 的只读列表、筛选和分页。</p>
+  <div class="home-workbench">
+    <div class="home-metric-grid">
+      <div class="metric-panel">
+        <div class="metric-label">当前阶段</div>
+        <div class="metric-value">基础后台骨架</div>
       </div>
-      <div class="flex gap-2">
-        <button class="btn-secondary" type="button">筛选</button>
-        <button class="btn-primary" type="button">查看健康状态</button>
+      <div class="metric-panel">
+        <div class="metric-label">核心数据表</div>
+        <div class="metric-value">3 张</div>
+      </div>
+      <div class="metric-panel">
+        <div class="metric-label">默认分页</div>
+        <div class="metric-value">50 行</div>
       </div>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50 text-left text-xs font-semibold uppercase tracking-normal text-slate-500">
-          <tr>
-            <th class="px-4 py-3">MSKU</th>
-            <th class="px-4 py-3">店铺站点</th>
-            <th class="px-4 py-3">品牌</th>
-            <th class="px-4 py-3">Listing</th>
-            <th class="px-4 py-3">销售状态</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 bg-white text-slate-700">
-          <tr>
-            <td class="px-4 py-4 text-slate-400" colspan="5">阶段 2 接入真实产品数据。</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="content-panel home-entry-panel">
+      <div class="panel-heading ops-results-heading">
+        <div>
+          <h2 class="panel-title">产品信息</h2>
+          <p class="panel-subtitle">下一阶段接入 amazon_product_info 的只读列表、筛选和分页。</p>
+        </div>
+        <div class="home-entry-actions">
+          <button class="btn-secondary" type="button">筛选</button>
+          <button class="btn-primary" type="button">查看健康状态</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table ops-list-table home-placeholder-table text-sm">
+          <thead class="text-left">
+            <tr>
+              <th class="table-head">MSKU</th>
+              <th class="table-head">店铺站点</th>
+              <th class="table-head">品牌</th>
+              <th class="table-head">Listing</th>
+              <th class="table-head">销售状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="table-row">
+              <td class="table-cell text-muted" colspan="5">阶段 2 接入真实产品数据。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 {% endblock %}

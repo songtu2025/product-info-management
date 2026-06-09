@@ -1,5 +1,6 @@
 import json
 import re
+import time
 
 from fastapi.testclient import TestClient
 
@@ -55,8 +56,8 @@ def test_product_list_renders_rows_and_pagination(monkeypatch):
     monkeypatch.setattr("app.modules.product_info.routes.list_products", fake_list_products)
     monkeypatch.setattr("app.modules.product_info.routes.get_filter_options", fake_get_filter_options)
     monkeypatch.setattr(
-        "app.modules.product_info.routes.get_product_quality_report",
-        lambda: {"total": 2634, "issues": [{"count": 7}, {"count": 3}]},
+        "app.modules.product_info.routes.get_product_quality_summary",
+        lambda: {"total": 2634, "quality_issue_total": 10},
     )
 
     response = client.get("/")
@@ -82,8 +83,98 @@ def test_product_list_renders_rows_and_pagination(monkeypatch):
     assert 'data-bulk-product-id="7"' in response.text
     assert "批量锁仓" in response.text
     assert "批量解锁" in response.text
-    assert "批量负责人" in response.text
+    assert "批量设置负责人" in response.text
+    assert 'placeholder="输入负责人"' in response.text
     assert 'name="owner"' in response.text
+
+
+def test_product_list_uses_lightweight_quality_summary(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.list_products",
+        lambda filters: {
+            "rows": [],
+            "total": 3,
+            "page": 1,
+            "page_size": 20,
+            "pages": 1,
+        },
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_filter_options",
+        lambda: {
+            "store_sites": [],
+            "brands": [],
+            "sales_statuses": [],
+            "listings": [],
+            "listing_owners": [],
+            "listing_owner_statuses": [],
+            "project_groups": [],
+        },
+    )
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_product_quality_summary",
+        lambda: {"total": 2634, "quality_issue_total": 10},
+        raising=False,
+    )
+
+    def full_report_should_not_run():
+        raise AssertionError("product list should not load the full quality report")
+
+    monkeypatch.setattr(
+        "app.modules.product_info.routes.get_product_quality_report",
+        full_report_should_not_run,
+        raising=False,
+    )
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "2634" in response.text
+    assert "10" in response.text
+
+
+def test_product_list_loads_independent_context_in_parallel(monkeypatch):
+    def slow_list_products(filters):
+        time.sleep(0.12)
+        return {
+            "rows": [],
+            "total": 3,
+            "page": 1,
+            "page_size": 20,
+            "pages": 1,
+        }
+
+    def slow_filter_options():
+        time.sleep(0.12)
+        return {
+            "store_sites": [],
+            "brands": [],
+            "sales_statuses": [],
+            "listings": [],
+            "listing_owners": [],
+            "listing_owner_statuses": [],
+            "project_groups": [],
+        }
+
+    def slow_quality_summary():
+        time.sleep(0.12)
+        return {"total": 2634, "quality_issue_total": 10}
+
+    def slow_preferences(username, keys):
+        time.sleep(0.12)
+        return {}
+
+    monkeypatch.setattr("app.modules.product_info.routes.list_products", slow_list_products)
+    monkeypatch.setattr("app.modules.product_info.routes.get_filter_options", slow_filter_options)
+    monkeypatch.setattr("app.modules.product_info.routes.get_product_quality_summary", slow_quality_summary)
+    monkeypatch.setattr("app.modules.product_info.routes.get_user_preferences", slow_preferences)
+
+    start = time.perf_counter()
+    response = client.get("/")
+    elapsed = time.perf_counter() - start
+
+    assert response.status_code == 200
+    assert elapsed < 0.35
 
 
 def test_product_bulk_lock_post_updates_selected_products(monkeypatch):
@@ -181,7 +272,7 @@ def test_product_list_uses_lightweight_table_columns(monkeypatch):
 
     assert response.status_code == 200
     assert "字段设置" in response.text
-    assert 'src="http://testserver/static/js/product-list.js"' in response.text
+    assert 'src="http://testserver/static/js/product-list.js?v=export-fields-modal"' in response.text
     assert '"storageKey": "productListColumnState"' in response.text
 
     visible_columns = [
@@ -270,14 +361,29 @@ def test_product_list_exposes_export_field_controls(monkeypatch):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "导出字段" in response.text
+    assert re.search(r'data-export-download[\s\S]*?>导出</a>', response.text)
+    assert "选择字段导出" not in response.text
+    assert "导出当前结果" not in response.text
+    assert "选择导出字段" in response.text
+    assert "data-export-fields-button" not in response.text
+    assert "data-export-fields-modal" in response.text
     assert "data-export-fields-panel" in response.text
+    assert "data-export-fields-confirm" in response.text
+    assert "data-export-fields-cancel" in response.text
+    assert 'data-list-action-group="export"' in response.text
+    assert 'data-list-action-group="bulk"' in response.text
+    assert 'data-list-action-group="manage"' in response.text
+    assert "data-list-bulk-owner-controls" in response.text
+    assert "批量设置负责人" in response.text
+    assert 'aria-label="批量设置负责人"' in response.text
+    assert 'placeholder="输入负责人"' in response.text
+    assert ">批量负责人</button>" not in response.text
     assert 'name="export_fields"' in response.text
     assert 'value="msku"' in response.text
     assert 'value="storage_type"' in response.text
     assert 'href="/products/export/import-compatible"' in response.text
     assert "导入兼容导出" in response.text
-    assert 'src="http://testserver/static/js/product-list.js"' in response.text
+    assert 'src="http://testserver/static/js/product-list.js?v=export-fields-modal"' in response.text
 
 
 def test_product_list_passes_search_and_filter_params(monkeypatch):

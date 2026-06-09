@@ -1,5 +1,6 @@
 import json
 from time import monotonic
+from weakref import WeakSet
 
 from sqlalchemy import bindparam
 from sqlalchemy import text
@@ -7,7 +8,7 @@ from sqlalchemy import text
 from app.core.db import get_engine
 
 
-_ENSURED_TABLE_ENGINE_IDS: set[int] = set()
+_ENSURED_TABLE_ENGINES = WeakSet()
 USER_PREFERENCE_CACHE_TTL_SECONDS = 60
 _user_preference_cache: dict[tuple[object, ...], dict[str, object]] = {}
 
@@ -137,11 +138,10 @@ def _preference_cache_key(engine, username: str, preference_keys: list[str]) -> 
 
 
 def _ensure_table_once(conn, engine) -> None:
-    engine_id = id(engine)
-    if engine_id in _ENSURED_TABLE_ENGINE_IDS:
+    if engine in _ENSURED_TABLE_ENGINES:
         return
     _ensure_table(conn)
-    _ENSURED_TABLE_ENGINE_IDS.add(engine_id)
+    _ENSURED_TABLE_ENGINES.add(engine)
 
 
 def _ensure_table(conn) -> None:

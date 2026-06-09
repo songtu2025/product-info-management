@@ -5,106 +5,128 @@
 {%- endmacro %}
 
 {% block content %}
-  <form class="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:grid-cols-[1fr_140px_140px_140px_150px_150px_120px_auto]" method="get">
-    <label class="field">
-      <span class="field-label">表名</span>
-      <input class="field-input" name="table_name" value="{{ filters.table_name or '' }}" placeholder="amazon_product_info">
-    </label>
-    <label class="field">
-      <span class="field-label">记录 ID</span>
-      <input class="field-input" name="record_id" value="{{ record_id_value }}" inputmode="numeric" placeholder="7">
-    </label>
-    <label class="field">
-      <span class="field-label">操作类型</span>
-      <input class="field-input" name="operation_type" value="{{ filters.operation_type or '' }}" placeholder="UPDATE">
-    </label>
-    <label class="field">
-      <span class="field-label">操作人</span>
-      <input class="field-input" name="changed_by" value="{{ filters.changed_by or '' }}" placeholder="admin">
-    </label>
-    <label class="field">
-      <span class="field-label">开始日期</span>
-      <input name="start_date" value="{{ filters.start_date or '' }}" class="field-input" type="date">
-    </label>
-    <label class="field">
-      <span class="field-label">结束日期</span>
-      <input name="end_date" value="{{ filters.end_date or '' }}" class="field-input" type="date">
-    </label>
-    <label class="field">
-      <span class="field-label">每页</span>
-      <select class="field-input" name="page_size">
-        {% for size in [50, 100, 200] %}
-          <option value="{{ size }}" {% if filters.page_size == size %}selected{% endif %}>{{ size }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <div class="flex items-end gap-2">
-      <button class="btn-primary" type="submit">查询</button>
-      <a class="btn-secondary inline-flex items-center" href="/operation-logs">重置</a>
-    </div>
-  </form>
+  <div class="ops-workbench operation-log-workbench">
+    <form class="filter-panel ops-filter-panel operation-log-filter-panel" method="get">
+      <div class="operation-log-filter-heading">
+        <div>
+          <h2 class="text-base font-bold text-slate-950">筛选操作日志</h2>
+          <p class="mt-1 text-sm text-slate-500">按表名、记录、操作类型、操作人和日期缩小日志范围。</p>
+        </div>
+        <div class="operation-log-filter-actions">
+          <button class="btn-primary" type="submit">查询</button>
+          <a class="btn-secondary" href="/operation-logs">重置</a>
+        </div>
+      </div>
 
-  <div class="content-panel">
-    <div class="border-b border-slate-200 px-4 py-4">
-      <h2 class="text-base font-semibold text-slate-950">操作日志</h2>
-      <p class="mt-1 text-sm text-slate-500">共 {{ log_page.total }} 条记录，只读展示。</p>
-    </div>
+      <div class="operation-log-filter-grid grid gap-3">
+        <label class="field">
+          <span class="field-label">表名</span>
+          <input class="field-input" name="table_name" value="{{ filters.table_name or '' }}" placeholder="amazon_product_info">
+        </label>
+        <label class="field">
+          <span class="field-label">记录 ID</span>
+          <input class="field-input" name="record_id" value="{{ record_id_value }}" inputmode="numeric" placeholder="7">
+        </label>
+        <label class="field">
+          <span class="field-label">操作类型</span>
+          <input class="field-input" name="operation_type" value="{{ filters.operation_type or '' }}" placeholder="UPDATE">
+        </label>
+        <label class="field">
+          <span class="field-label">操作人</span>
+          <input class="field-input" name="changed_by" value="{{ filters.changed_by or '' }}" placeholder="admin">
+        </label>
+        <label class="field">
+          <span class="field-label">开始日期</span>
+          <input name="start_date" value="{{ filters.start_date or '' }}" class="field-input" type="date">
+        </label>
+        <label class="field">
+          <span class="field-label">结束日期</span>
+          <input name="end_date" value="{{ filters.end_date or '' }}" class="field-input" type="date">
+        </label>
+        <label class="field">
+          <span class="field-label">每页</span>
+          <select class="field-input" name="page_size">
+            {% for size in [50, 100, 200] %}
+              <option value="{{ size }}" {% if filters.page_size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </form>
 
-    <div class="divide-y divide-slate-100">
-      {% for row in rows %}
-        <article class="bg-white px-4 py-4">
-          <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <span class="font-semibold text-slate-950">{{ row.table_name }}</span>
-              <span class="text-slate-500">#{{ row.record_id }}</span>
-              <span class="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800">{{ row.operation_type }}</span>
-              <span class="text-slate-500">操作人：{{ row.changed_by }}</span>
+    <div class="content-panel ops-results-panel operation-log-results-panel">
+      <div class="panel-heading ops-results-heading operation-log-results-heading">
+        <div>
+          <h2 class="panel-title">操作日志</h2>
+          <p class="panel-subtitle">共 {{ log_page.total }} 条记录，只读展示。每条日志展示字段修改前后的值。</p>
+        </div>
+        <span class="status-badge status-badge-muted">第 {{ log_page.page }} 页</span>
+      </div>
+
+      <div class="operation-log-entry-list">
+        {% for row in rows %}
+          <article class="operation-log-entry">
+            <div class="operation-log-entry-heading">
+              <div class="operation-log-entry-meta">
+                <span class="font-semibold text-slate-950">{{ row.table_name }}</span>
+                <span class="text-slate-500">#{{ row.record_id }}</span>
+                <span class="status-badge">{{ row.operation_type }}</span>
+                <span class="text-slate-500">操作人：{{ row.changed_by }}</span>
+              </div>
+              <div class="operation-log-entry-time">{{ row.created_at }}</div>
             </div>
-            <div class="text-sm text-slate-500">{{ row.created_at }}</div>
-          </div>
 
-          <div class="mt-3 overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead class="text-left text-xs font-semibold text-slate-500">
-                <tr>
-                  <th class="py-2 pr-4">字段</th>
-                  <th class="py-2 pr-4">修改前</th>
-                  <th class="py-2 pr-4">修改后</th>
-                </tr>
-              </thead>
-              <tbody class="align-top text-slate-700">
-                {% for item in row.change_items %}
-                  <tr class="border-t border-slate-100">
-                    <td class="py-2 pr-4 font-medium text-slate-950">{{ item.field }}</td>
-                    <td class="max-w-md whitespace-pre-wrap break-words py-2 pr-4">{{ value(item.old) }}</td>
-                    <td class="max-w-md whitespace-pre-wrap break-words py-2 pr-4">{{ value(item.new) }}</td>
-                  </tr>
-                {% else %}
+            <div class="table-wrap operation-log-change-wrap">
+              <table class="data-table ops-list-table operation-log-change-table text-sm">
+                <thead class="text-left">
                   <tr>
-                    <td class="py-2 text-slate-500" colspan="3">没有可解析的修改内容</td>
+                    <th class="table-head">字段</th>
+                    <th class="table-head">修改前</th>
+                    <th class="table-head">修改后</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {% for item in row.change_items %}
+                    <tr class="table-row">
+                      <td class="table-cell font-medium text-slate-950">{{ item.field }}</td>
+                      <td class="table-cell operation-log-change-value">{{ value(item.old) }}</td>
+                      <td class="table-cell operation-log-change-value">{{ value(item.new) }}</td>
+                    </tr>
+                  {% else %}
+                    <tr>
+                      <td colspan="3">
+                        <div class="empty-state empty-state-compact">
+                          <div class="empty-state-title">没有可解析的修改内容</div>
+                          <div class="empty-state-copy">该日志没有标准字段变更明细。</div>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        {% else %}
+          <div class="empty-state">
+            <div class="empty-state-title">没有匹配的操作日志</div>
+            <div class="empty-state-copy">可以调整筛选条件后重新查询。</div>
           </div>
-        </article>
-      {% else %}
-        <div class="px-4 py-8 text-center text-sm text-slate-500">没有匹配的操作日志</div>
-      {% endfor %}
+        {% endfor %}
+      </div>
+
+      {% if log_page.pages > 1 %}
+        <div class="pagination-bar operation-log-pagination">
+          <span>第 {{ log_page.page }} / {{ log_page.pages }} 页</span>
+          <div class="pagination-actions">
+            {% if log_page.page > 1 %}
+              <a class="btn-secondary" href="{{ request.url.include_query_params(page=log_page.page - 1) }}">上一页</a>
+            {% endif %}
+            {% if log_page.page < log_page.pages %}
+              <a class="btn-secondary" href="{{ request.url.include_query_params(page=log_page.page + 1) }}">下一页</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
     </div>
   </div>
-
-  {% if log_page.pages > 1 %}
-    <div class="mt-4 flex items-center justify-between text-sm text-slate-600">
-      <span>第 {{ log_page.page }} / {{ log_page.pages }} 页</span>
-      <div class="flex gap-2">
-        {% if log_page.page > 1 %}
-          <a class="btn-secondary inline-flex items-center" href="{{ request.url.include_query_params(page=log_page.page - 1) }}">上一页</a>
-        {% endif %}
-        {% if log_page.page < log_page.pages %}
-          <a class="btn-secondary inline-flex items-center" href="{{ request.url.include_query_params(page=log_page.page + 1) }}">下一页</a>
-        {% endif %}
-      </div>
-    </div>
-  {% endif %}
 {% endblock %}

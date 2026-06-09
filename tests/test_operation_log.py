@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -194,3 +195,18 @@ def test_operation_log_page_keeps_new_filter_values(monkeypatch):
     assert 'name="changed_by" value="alice"' in response.text
     assert 'name="start_date" value="2026-06-01"' in response.text
     assert 'name="end_date" value="2026-06-03"' in response.text
+
+
+def test_operation_log_page_uses_layered_operational_layout():
+    template = Path("app/templates/operation_log/list.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "ops-workbench operation-log-workbench" in template
+    assert "ops-filter-panel operation-log-filter-panel" in template
+    assert "ops-results-panel operation-log-results-panel" in template
+    assert "ops-results-heading operation-log-results-heading" in template
+    assert "operation-log-entry-list" in template
+    assert "operation-log-entry" in template
+    assert "ops-list-table operation-log-change-table" in template
+    assert ".operation-log-workbench.ops-workbench" in app_css
+    assert ".operation-log-entry" in app_css

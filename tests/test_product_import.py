@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
@@ -372,13 +373,28 @@ def test_product_import_page_renders_upload_form():
     response = client.get("/products/import")
 
     assert response.status_code == 200
-    assert 'class="import-workbench"' in response.text
+    assert 'class="ops-workbench import-workbench"' in response.text
     assert "1 下载模板" in response.text
     assert "2 上传校验" in response.text
     assert "3 确认写入" in response.text
     assert "上传 Excel" in response.text
     assert "name=\"file\"" in response.text
     assert "/products/import/template" in response.text
+
+
+def test_product_import_page_uses_layered_operational_layout():
+    template = Path("app/templates/product_import/upload.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "ops-workbench import-workbench" in template
+    assert "ops-results-panel import-upload-panel" in template
+    assert "import-upload-heading" in template
+    assert "ops-results-panel import-preview-panel" in template
+    assert "import-result-alert" in template
+    assert "ops-list-table import-preview-table" in template
+    assert ".import-workbench.ops-workbench" in app_css
+    assert ".import-upload-panel" in app_css
+    assert ".data-table.ops-list-table.import-preview-table" in app_css
 
 
 def test_product_import_template_downloads_xlsx():
@@ -434,7 +450,7 @@ def test_product_import_preview_renders_result(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert 'class="import-preview-panel"' in response.text
+    assert 'class="content-panel ops-results-panel import-preview-panel"' in response.text
     assert "可更新 1 行" in response.text
     assert "校验结果" in response.text
     assert "校验通过，可确认写入数据库。" in response.text

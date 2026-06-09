@@ -22,6 +22,14 @@ CREATE_FIELDS = ("store_site", "listing", *EDITABLE_FIELDS)
 LISTING_OWNER_PAGE_SIZES = (50, 100, 200)
 FILTER_OPTIONS_CACHE_TTL_SECONDS = 300
 _filter_options_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.0, "value": None}
+LISTING_OWNER_LIST_CACHE_TTL_SECONDS = 60
+_listing_owner_list_cache: dict[tuple[object, ...], dict[str, object]] = {}
+PRODUCT_TABLE_AVAILABLE_CACHE_TTL_SECONDS = 300
+_product_table_available_cache: dict[str, object] = {
+    "engine_id": None,
+    "expires_at": 0.0,
+    "value": None,
+}
 
 
 class DuplicateListingOwnerError(Exception):
@@ -46,6 +54,11 @@ def list_listing_owners(filters: ListingOwnerFilters | str | None = None) -> dic
     engine = get_engine()
     if engine is None:
         return _empty_page(filters)
+    cache_key = _listing_owner_list_cache_key(engine, filters)
+    cached = _listing_owner_list_cache.get(cache_key)
+    now = monotonic()
+    if cached and now < cached["expires_at"]:
+        return cached["value"]
 
     where_sql, params = _build_where(filters)
     list_where_sql, _ = _build_where(filters, table_alias="lo")
@@ -101,13 +114,18 @@ def list_listing_owners(filters: ListingOwnerFilters | str | None = None) -> dic
         rows = [dict(row) for row in conn.execute(list_sql, params).mappings()]
 
     pages = ceil(total / filters.page_size) if total else 0
-    return {
+    page = {
         "rows": rows,
         "total": total,
         "page": filters.page,
         "page_size": filters.page_size,
         "pages": pages,
     }
+    _listing_owner_list_cache[cache_key] = {
+        "expires_at": now + LISTING_OWNER_LIST_CACHE_TTL_SECONDS,
+        "value": page,
+    }
+    return page
 
 
 def get_filter_options() -> dict[str, list[str]]:
@@ -123,19 +141,72 @@ def get_filter_options() -> dict[str, list[str]]:
     ):
         return _filter_options_cache["value"]
 
-    queries = {
-        "store_sites": "SELECT DISTINCT store_site AS value FROM amazon_listing_owner_config WHERE store_site IS NOT NULL AND store_site <> '' ORDER BY store_site LIMIT 300",
-        "owners": "SELECT DISTINCT owner AS value FROM amazon_listing_owner_config WHERE owner IS NOT NULL AND owner <> '' ORDER BY owner LIMIT 300",
-        "listing_statuses": "SELECT DISTINCT listing_status AS value FROM amazon_listing_owner_config WHERE listing_status IS NOT NULL AND listing_status <> '' ORDER BY listing_status LIMIT 100",
-        "listing_maintainers": "SELECT DISTINCT listing_maintainer AS value FROM amazon_listing_owner_config WHERE listing_maintainer IS NOT NULL AND listing_maintainer <> '' ORDER BY listing_maintainer LIMIT 300",
-        "inventory_age_assessments": "SELECT DISTINCT include_inventory_age_assessment AS value FROM amazon_listing_owner_config WHERE include_inventory_age_assessment IS NOT NULL AND include_inventory_age_assessment <> '' ORDER BY include_inventory_age_assessment LIMIT 50",
-        "project_groups": "SELECT DISTINCT project_group AS value FROM amazon_listing_owner_config WHERE project_group IS NOT NULL AND project_group <> '' ORDER BY project_group LIMIT 100",
-    }
+    query = text(
+        """
+        SELECT option_key, value
+        FROM (
+            SELECT 'store_sites' AS option_key, value, 1 AS sort_order
+            FROM (
+                SELECT DISTINCT store_site AS value
+                FROM amazon_listing_owner_config
+                WHERE store_site IS NOT NULL AND store_site <> ''
+                ORDER BY store_site
+                LIMIT 300
+            ) store_sites
+            UNION ALL
+            SELECT 'owners' AS option_key, value, 2 AS sort_order
+            FROM (
+                SELECT DISTINCT owner AS value
+                FROM amazon_listing_owner_config
+                WHERE owner IS NOT NULL AND owner <> ''
+                ORDER BY owner
+                LIMIT 300
+            ) owners
+            UNION ALL
+            SELECT 'listing_statuses' AS option_key, value, 3 AS sort_order
+            FROM (
+                SELECT DISTINCT listing_status AS value
+                FROM amazon_listing_owner_config
+                WHERE listing_status IS NOT NULL AND listing_status <> ''
+                ORDER BY listing_status
+                LIMIT 100
+            ) listing_statuses
+            UNION ALL
+            SELECT 'listing_maintainers' AS option_key, value, 4 AS sort_order
+            FROM (
+                SELECT DISTINCT listing_maintainer AS value
+                FROM amazon_listing_owner_config
+                WHERE listing_maintainer IS NOT NULL AND listing_maintainer <> ''
+                ORDER BY listing_maintainer
+                LIMIT 300
+            ) listing_maintainers
+            UNION ALL
+            SELECT 'inventory_age_assessments' AS option_key, value, 5 AS sort_order
+            FROM (
+                SELECT DISTINCT include_inventory_age_assessment AS value
+                FROM amazon_listing_owner_config
+                WHERE include_inventory_age_assessment IS NOT NULL
+                  AND include_inventory_age_assessment <> ''
+                ORDER BY include_inventory_age_assessment
+                LIMIT 50
+            ) inventory_age_assessments
+            UNION ALL
+            SELECT 'project_groups' AS option_key, value, 6 AS sort_order
+            FROM (
+                SELECT DISTINCT project_group AS value
+                FROM amazon_listing_owner_config
+                WHERE project_group IS NOT NULL AND project_group <> ''
+                ORDER BY project_group
+                LIMIT 100
+            ) project_groups
+        ) options
+        ORDER BY sort_order, value
+        """
+    )
     with engine.connect() as conn:
-        options = {
-            key: [row["value"] for row in conn.execute(text(sql)).mappings()]
-            for key, sql in queries.items()
-        }
+        options = _empty_options()
+        for row in conn.execute(query).mappings():
+            options[row["option_key"]].append(row["value"])
     _filter_options_cache.update(
         {
             "engine_id": engine_id,
@@ -150,13 +221,38 @@ def clear_filter_options_cache() -> None:
     _filter_options_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
 
 
+def clear_listing_owner_list_cache() -> None:
+    _listing_owner_list_cache.clear()
+
+
+def clear_product_table_available_cache() -> None:
+    _product_table_available_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
+
+
 def _product_table_available(engine) -> bool:
+    now = monotonic()
+    engine_id = id(engine)
+    if (
+        _product_table_available_cache["engine_id"] == engine_id
+        and _product_table_available_cache["value"] is not None
+        and now < _product_table_available_cache["expires_at"]
+    ):
+        return bool(_product_table_available_cache["value"])
+
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1 FROM amazon_product_info LIMIT 1")).first()
-        return True
+        available = True
     except SQLAlchemyError:
-        return False
+        available = False
+    _product_table_available_cache.update(
+        {
+            "engine_id": engine_id,
+            "expires_at": now + PRODUCT_TABLE_AVAILABLE_CACHE_TTL_SECONDS,
+            "value": available,
+        }
+    )
+    return available
 
 
 def _build_where(
@@ -306,6 +402,7 @@ def create_listing_owner(
         )
 
     clear_filter_options_cache()
+    clear_listing_owner_list_cache()
     return row_id
 
 
@@ -360,6 +457,7 @@ def update_listing_owner(
 
     if result.rowcount > 0:
         clear_filter_options_cache()
+        clear_listing_owner_list_cache()
     return result.rowcount > 0
 
 
@@ -463,6 +561,7 @@ def bulk_assign_listing_owner_from_products(
 
     if created or updated:
         clear_filter_options_cache()
+        clear_listing_owner_list_cache()
     return {"created": created, "updated": updated, "skipped": skipped, "requested": len(clean_ids)}
 
 
@@ -509,3 +608,18 @@ def _empty_options() -> dict[str, list[str]]:
         "inventory_age_assessments": [],
         "project_groups": [],
     }
+
+
+def _listing_owner_list_cache_key(engine, filters: ListingOwnerFilters) -> tuple[object, ...]:
+    return (
+        id(engine),
+        filters.q,
+        filters.store_site,
+        filters.owner,
+        filters.listing_status,
+        filters.listing_maintainer,
+        filters.include_inventory_age_assessment,
+        filters.project_group,
+        filters.page,
+        filters.page_size,
+    )

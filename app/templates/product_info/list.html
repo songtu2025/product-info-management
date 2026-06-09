@@ -3,11 +3,12 @@
 {% block content %}
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
 
-  <section class="mb-4">
+  <div class="product-workbench">
+  <section class="product-overview mb-3">
     <div class="mb-2">
       <h2 class="text-base font-bold text-slate-950">运营概览</h2>
     </div>
-    <div class="grid gap-3 md:grid-cols-3">
+    <div class="product-dashboard-grid grid gap-3 md:grid-cols-3">
       <div class="metric-panel">
         <div class="metric-label">产品总数</div>
         <div class="metric-value">{{ dashboard.product_total }}</div>
@@ -23,8 +24,8 @@
     </div>
   </section>
 
-  <form class="filter-panel mb-4" method="get">
-    <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+  <form class="filter-panel product-filter-panel mb-3" method="get">
+    <div class="product-filter-header mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
       <div>
         <h2 class="text-base font-bold text-slate-950">筛选产品</h2>
         <p class="mt-1 text-sm text-slate-500">按运营常用维度缩小列表范围。</p>
@@ -35,8 +36,8 @@
       </div>
     </div>
 
-    <div class="grid gap-3 lg:grid-cols-7">
-      <label class="field lg:col-span-2">
+    <div class="product-filter-grid grid gap-3 md:grid-cols-4 lg:grid-cols-7">
+      <label class="field md:col-span-2 lg:col-span-2">
         <span class="field-label">关键词</span>
         <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="MSKU / ASIN / SKU / Listing">
       </label>
@@ -153,7 +154,7 @@
     {% endif %}
   </form>
 
-  <section class="filter-panel mb-4" data-filter-view-panel>
+  <section class="filter-panel product-filter-view-panel mb-3" data-filter-view-panel>
     <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
       <div>
         <h2 class="text-base font-bold text-slate-950">常用筛选</h2>
@@ -176,108 +177,139 @@
     </div>
   </section>
 
-  <div class="content-panel">
-    <div class="panel-heading flex-col items-start md:flex-row md:items-center">
-      <div>
-        <h3 class="panel-title">结果列表</h3>
-        <p class="panel-subtitle">
-          共 {{ products.total }} 条，每页 {{ products.page_size }} 行，当前第 {{ products.page }} 页
-        </p>
+  <div class="content-panel product-results-panel">
+    <div class="panel-heading product-results-heading">
+      <div class="product-results-summary">
+        <div>
+          <h3 class="panel-title">结果列表</h3>
+          <p class="panel-subtitle">
+            共 {{ products.total }} 条，每页 {{ products.page_size }} 行，当前第 {{ products.page }} 页
+          </p>
+        </div>
+        <span class="product-results-note">长文本和系统字段默认隐藏，可按需打开。</span>
       </div>
       <div class="list-panel-tools">
         <div class="list-panel-actions">
-          <a class="btn-secondary" href="{{ export_url }}" data-export-download>导出当前结果</a>
-          <a class="btn-secondary" href="{{ import_compatible_export_url }}">导入兼容导出</a>
-          <button
-            class="btn-secondary"
-            data-export-fields-button
-            type="button"
-            aria-expanded="false"
-            aria-controls="product-export-fields"
-          >导出字段</button>
+          <div class="list-action-group" data-list-action-group="export">
+            <a
+              class="btn-secondary"
+              href="{{ export_url }}"
+              data-export-download
+              aria-haspopup="dialog"
+              aria-controls="product-export-fields-dialog"
+            >导出</a>
+            <a class="btn-secondary" href="{{ import_compatible_export_url }}">导入兼容导出</a>
+          </div>
           {% if can_edit %}
-            <button
-              class="btn-secondary"
-              form="product-bulk-form"
-              formaction="/products/bulk-lock"
-              name="lock_status"
-              data-bulk-confirm
-              data-confirm-action="锁仓"
-              type="submit"
-              value="锁"
-            >批量锁仓</button>
-            <button
-              class="btn-secondary"
-              form="product-bulk-form"
-              formaction="/products/bulk-lock"
-              name="lock_status"
-              data-bulk-confirm
-              data-confirm-action="解锁"
-              type="submit"
-              value=""
-            >批量解锁</button>
-            <input
-              class="field-input h-9 w-32"
-              form="product-bulk-form"
-              list="product-listing-owner-options"
-              name="owner"
-              placeholder="负责人"
-            >
-            <datalist id="product-listing-owner-options">
-              {% for value in options.listing_owners %}
-                <option value="{{ value }}"></option>
-              {% endfor %}
-            </datalist>
-            <button
-              class="btn-secondary"
-              form="product-bulk-form"
-              formaction="/products/bulk-listing-owner"
-              data-bulk-confirm
-              data-confirm-action="设置负责人"
-              type="submit"
-            >批量负责人</button>
-            <a class="btn-primary" href="{{ create_url }}">新增产品</a>
+            <div class="list-action-group list-action-group-bulk" data-list-action-group="bulk">
+              <button
+                class="btn-secondary"
+                form="product-bulk-form"
+                formaction="/products/bulk-lock"
+                name="lock_status"
+                data-bulk-confirm
+                data-confirm-action="锁仓"
+                type="submit"
+                value="锁"
+              >批量锁仓</button>
+              <button
+                class="btn-secondary"
+                form="product-bulk-form"
+                formaction="/products/bulk-lock"
+                name="lock_status"
+                data-bulk-confirm
+                data-confirm-action="解锁"
+                type="submit"
+                value=""
+              >批量解锁</button>
+              <div class="list-bulk-owner-controls" data-list-bulk-owner-controls>
+                <input
+                  class="field-input h-9"
+                  form="product-bulk-form"
+                  list="product-listing-owner-options"
+                  name="owner"
+                  aria-label="批量设置负责人"
+                  placeholder="输入负责人"
+                >
+                <datalist id="product-listing-owner-options">
+                  {% for value in options.listing_owners %}
+                    <option value="{{ value }}"></option>
+                  {% endfor %}
+                </datalist>
+                <button
+                  class="btn-secondary"
+                  form="product-bulk-form"
+                  formaction="/products/bulk-listing-owner"
+                  data-bulk-confirm
+                  data-confirm-action="设置负责人"
+                  type="submit"
+                >批量设置负责人</button>
+              </div>
+            </div>
+            <div class="list-action-group" data-list-action-group="manage">
+              <a class="btn-primary" href="{{ create_url }}">新增产品</a>
+              <button
+                class="btn-secondary"
+                data-column-settings-button
+                type="button"
+                aria-expanded="false"
+                aria-controls="product-column-settings"
+              >字段设置</button>
+            </div>
+          {% else %}
+            <div class="list-action-group" data-list-action-group="manage">
+              <button
+                class="btn-secondary"
+                data-column-settings-button
+                type="button"
+                aria-expanded="false"
+                aria-controls="product-column-settings"
+              >字段设置</button>
+            </div>
           {% endif %}
-          <button
-            class="btn-secondary"
-            data-column-settings-button
-            type="button"
-            aria-expanded="false"
-            aria-controls="product-column-settings"
-          >字段设置</button>
         </div>
         <span class="bulk-action-feedback" data-bulk-action-feedback hidden></span>
-        <span>长文本和系统字段默认隐藏，可按需打开。</span>
       </div>
     </div>
 
-    <div
-      class="field-settings-panel hidden"
-      id="product-export-fields"
-      data-export-fields-panel
-    >
-      <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div class="text-sm font-bold text-slate-900">导出字段</div>
-          <div class="mt-1 text-xs text-slate-500">勾选本次 Excel 需要导出的字段。</div>
+    <div class="export-fields-modal hidden" data-export-fields-modal aria-hidden="true">
+      <div class="export-fields-backdrop" data-export-fields-dismiss></div>
+      <section
+        class="export-fields-dialog"
+        id="product-export-fields-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-export-fields-title"
+      >
+        <div class="export-fields-header">
+          <div>
+            <div class="text-sm font-bold text-slate-900" id="product-export-fields-title">选择导出字段</div>
+            <div class="mt-1 text-xs text-slate-500">确认字段后才会生成 Excel。</div>
+          </div>
+          <button class="btn-secondary" data-export-fields-reset type="button">恢复默认</button>
         </div>
-        <button class="btn-secondary" data-export-fields-reset type="button">恢复默认</button>
-      </div>
-      <div class="field-settings-list">
-        {% for column in product_export_columns %}
-          <label class="field-settings-item">
-            <input
-              class="h-4 w-4"
-              name="export_fields"
-              data-export-field="{{ column.key }}"
-              value="{{ column.key }}"
-              type="checkbox"
-              {% if column.key in saved_export_fields %}checked{% endif %}
-            >
-            <span class="truncate">{{ column.label }}</span>
-          </label>
-        {% endfor %}
-      </div>
+        <div class="export-fields-body" id="product-export-fields" data-export-fields-panel>
+          <div class="field-settings-list">
+            {% for column in product_export_columns %}
+              <label class="field-settings-item">
+                <input
+                  class="h-4 w-4"
+                  name="export_fields"
+                  data-export-field="{{ column.key }}"
+                  value="{{ column.key }}"
+                  type="checkbox"
+                  {% if column.key in saved_export_fields %}checked{% endif %}
+                >
+                <span class="truncate">{{ column.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="export-fields-actions">
+          <button class="btn-secondary" data-export-fields-cancel type="button">取消</button>
+          <button class="btn-primary" data-export-fields-confirm type="button">确认导出</button>
+        </div>
+      </section>
     </div>
 
     <div
@@ -326,7 +358,7 @@
           type="hidden"
           value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}"
         >
-        <table class="data-table table-fixed text-sm" data-product-list-table>
+        <table class="data-table product-list-table table-fixed text-sm" data-product-list-table>
           <colgroup>
             {% if can_edit %}
               <col data-column="bulk-select">
@@ -471,6 +503,7 @@
       </form>
     </div>
   </div>
+  </div>
 
   <script id="product-list-config" type="application/json">
     {{
@@ -483,5 +516,5 @@
       }|tojson
     }}
   </script>
-  <script src="{{ url_for('static', path='js/product-list.js') }}"></script>
+  <script src="{{ url_for('static', path='js/product-list.js') }}?v=export-fields-modal"></script>
 {% endblock %}

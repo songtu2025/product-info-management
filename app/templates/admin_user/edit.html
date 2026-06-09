@@ -1,7 +1,7 @@
 {% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
 
 {% block content %}
-  <div class="form-shell">
+  <div class="form-shell account-form-shell">
   <div class="form-page-header">
     <div>
       <a class="detail-back-link" href="/admin-users">返回用户管理</a>
@@ -17,7 +17,7 @@
     </div>
   {% endif %}
 
-  <form class="content-panel" method="post">
+  <form class="content-panel account-form-panel" method="post">
     <section class="form-section">
       <div class="form-section-heading">
         <h3 class="form-section-title">只读账号</h3>

@@ -5,8 +5,9 @@
 {%- endmacro %}
 
 {% block content %}
-  <div class="content-panel">
-    <div class="panel-heading">
+  <div class="ops-workbench admin-user-workbench">
+  <div class="content-panel ops-results-panel admin-user-results-panel">
+    <div class="panel-heading ops-results-heading admin-user-results-heading">
       <div>
         <h2 class="panel-title">用户管理</h2>
         <p class="panel-subtitle">最多显示最近 200 个后台账号，仅展示账号、角色和状态，不展示密码哈希。</p>
@@ -15,7 +16,7 @@
     </div>
 
     <div class="table-wrap">
-      <table class="data-table text-sm">
+      <table class="data-table ops-list-table admin-user-table text-sm">
         <thead class="text-left">
           <tr>
             <th class="table-head">账号</th>
@@ -65,5 +66,6 @@
         </tbody>
       </table>
     </div>
+  </div>
   </div>
 {% endblock %}

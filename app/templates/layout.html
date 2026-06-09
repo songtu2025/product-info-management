@@ -44,7 +44,7 @@
 
       <main class="flex min-w-0 flex-1 flex-col">
         <header class="app-header">
-          <div class="flex min-h-16 items-center justify-between gap-4 px-5 py-3">
+          <div class="app-header-inner flex min-h-16 items-center justify-between gap-4 px-5 py-3">
             <div>
               <p class="page-kicker" data-page-kicker>{{ active_nav|default("产品信息") }}</p>
               <h1 class="mt-1 text-lg font-bold text-slate-950">{{ app_name }}</h1>
@@ -64,7 +64,7 @@
 
         <div class="page-status" data-page-status role="status" aria-live="polite" hidden>正在加载...</div>
 
-        <section class="flex-1 px-5 py-5" data-app-content tabindex="-1">
+        <section class="app-content flex-1 px-5 py-5" data-app-content tabindex="-1">
           {% set flash_message = pop_flash(request) %}
           {% if flash_message %}
             <div class="flash-message flash-message-auto-dismiss" role="status">{{ flash_message }}</div>

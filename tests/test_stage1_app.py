@@ -171,6 +171,72 @@ def test_product_list_preferences_show_save_feedback():
     assert ".page-status-error" in app_css
 
 
+def test_product_export_requires_field_confirmation():
+    product_list_html = Path("app/templates/product_info/list.html").read_text(encoding="utf-8")
+    product_list_js = Path("app/static/js/product-list.js").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "data-export-fields-modal" in product_list_html
+    assert "data-export-fields-confirm" in product_list_html
+    assert "data-export-fields-cancel" in product_list_html
+    assert "openExportFieldsModal" in product_list_js
+    assert "closeExportFieldsModal" in product_list_js
+    assert "exportFieldsConfirm?.addEventListener" in product_list_js
+    assert "正在准备导出..." in product_list_js
+    assert ".export-fields-modal" in app_css
+    assert ".export-fields-dialog" in app_css
+
+
+def test_product_list_actions_use_grouped_toolbar_layout():
+    product_list_html = Path("app/templates/product_info/list.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert 'data-list-action-group="export"' in product_list_html
+    assert 'data-list-action-group="bulk"' in product_list_html
+    assert 'data-list-action-group="manage"' in product_list_html
+    assert "data-list-bulk-owner-controls" in product_list_html
+    assert ".list-action-group" in app_css
+    assert ".list-action-group-bulk" in app_css
+    assert ".list-bulk-owner-controls" in app_css
+
+
+def test_product_list_page_uses_compact_operational_layout():
+    product_list_html = Path("app/templates/product_info/list.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "product-dashboard-grid" in product_list_html
+    assert "product-filter-panel" in product_list_html
+    assert "product-filter-grid" in product_list_html
+    assert "md:grid-cols-4 lg:grid-cols-7" in product_list_html
+    assert "product-filter-view-panel" in product_list_html
+    assert "product-results-panel" in product_list_html
+    assert "product-results-heading" in product_list_html
+    assert "product-results-note" in product_list_html
+    assert "product-list-table" in product_list_html
+    assert ".product-results-heading" in app_css
+    assert ".product-results-note" in app_css
+    assert ".product-list-table [data-column=\"actions\"]" in app_css
+
+
+def test_system_ui_uses_layered_visual_hierarchy():
+    layout_html = Path("app/templates/layout.html").read_text(encoding="utf-8")
+    product_list_html = Path("app/templates/product_info/list.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "app-header-inner" in layout_html
+    assert "app-content" in layout_html
+    assert "product-workbench" in product_list_html
+    assert "--bg-elevated" in app_css
+    assert "--shadow-surface" in app_css
+    assert "--shadow-raised" in app_css
+    assert ".app-header-inner" in app_css
+    assert ".app-content" in app_css
+    assert ".product-workbench" in app_css
+    assert ".product-results-panel" in app_css
+    assert "box-shadow: var(--shadow-raised)" in app_css
+    assert ".product-list-table .table-row:hover" in app_css
+
+
 def test_write_actions_require_confirmation_before_submit():
     product_list_html = Path("app/templates/product_info/list.html").read_text(encoding="utf-8")
     import_upload_html = Path("app/templates/product_import/upload.html").read_text(encoding="utf-8")

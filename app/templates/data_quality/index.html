@@ -5,7 +5,7 @@
 {%- endmacro %}
 
 {% block content %}
-  <div class="quality-workbench">
+  <div class="ops-workbench quality-workbench">
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
   {% set field_issues = report.field_issues %}
   {% set relation_issues = report.relation_issues %}
@@ -17,7 +17,7 @@
     {% set ns.relation_total = ns.relation_total + issue.count %}
   {% endfor %}
 
-  <section class="content-panel quality-hero">
+  <section class="content-panel ops-results-panel quality-hero quality-summary-panel">
     <div>
       <div class="quality-kicker">只读检查台</div>
       <h2 class="quality-title">数据质量</h2>
@@ -48,7 +48,7 @@
     </div>
   </section>
 
-  <section class="quality-overview">
+  <section class="content-panel quality-overview quality-overview-panel">
     <div class="quality-block-heading">
       <div>
         <h3 class="quality-block-title">检查项概览</h3>
@@ -103,7 +103,7 @@
     <h4 class="quality-group-title">字段完整性</h4>
   <div class="quality-sections">
     {% for issue in field_issues %}
-      <section class="content-panel">
+      <section class="content-panel ops-results-panel quality-issue-panel">
         <div class="panel-heading quality-section-heading">
           <div>
             <h3 class="panel-title">{{ issue.label }}</h3>
@@ -114,7 +114,7 @@
           </span>
         </div>
         <div class="table-wrap">
-          <table class="data-table text-sm">
+          <table class="data-table ops-list-table quality-detail-table text-sm">
             <thead>
               <tr>
                 <th class="table-head">MSKU</th>
@@ -155,7 +155,7 @@
     <h4 class="quality-group-title">业务关系健康</h4>
     <div class="quality-sections">
     {% for issue in relation_issues %}
-      <section class="content-panel">
+      <section class="content-panel ops-results-panel quality-issue-panel">
         <div class="panel-heading quality-section-heading">
           <div>
             <h3 class="panel-title">{{ issue.label }}</h3>
@@ -166,7 +166,7 @@
           </span>
         </div>
         <div class="table-wrap">
-          <table class="data-table text-sm">
+          <table class="data-table ops-list-table quality-detail-table text-sm">
             <thead>
               <tr>
                 <th class="table-head">店铺站点</th>

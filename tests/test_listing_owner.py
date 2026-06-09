@@ -1,7 +1,8 @@
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 
 from app.main import app
 from app.modules.listing_owner import service
@@ -144,6 +145,24 @@ def test_listing_owner_list_passes_structured_filters_and_renders_options(monkey
     assert 'option value="张三" selected' in response.text
     assert "store_site=SAYOLA%3AUS" in response.text
     assert "include_inventory_age_assessment=%E6%98%AF" in response.text
+
+
+def test_listing_owner_list_uses_layered_operational_layout():
+    template = Path("app/templates/listing_owner/list.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "listing-owner-workbench" in template
+    assert "ops-filter-panel" in template
+    assert "listing-owner-filter-grid" in template
+    assert "listing-owner-results-panel" in template
+    assert "ops-results-heading" in template
+    assert "listing-owner-table" in template
+    assert "pagination-bar" in template
+    assert ".ops-workbench" in app_css
+    assert ".ops-filter-panel" in app_css
+    assert ".listing-owner-filter-grid" in app_css
+    assert ".ops-results-panel" in app_css
+    assert ".ops-list-table .table-row:hover" in app_css
 
 
 def test_list_listing_owners_returns_paginated_filtered_page(monkeypatch):
@@ -323,6 +342,131 @@ def test_list_listing_owners_counts_linked_products(monkeypatch):
     assert counts == {"RB832": 0, "RB833": 2}
 
 
+def test_list_listing_owners_reuses_short_lived_page_cache(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    id, store_site, listing, owner, listing_status
+                )
+                VALUES (1, 'SAYOLA:US', 'RB833', '张三', '正常')
+                """
+            )
+        )
+
+    connect_count = 0
+    original_connect = engine.connect
+
+    def counted_connect(*args, **kwargs):
+        nonlocal connect_count
+        connect_count += 1
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    monkeypatch.setattr(engine, "connect", counted_connect)
+    if hasattr(service, "clear_listing_owner_list_cache"):
+        service.clear_listing_owner_list_cache()
+    if hasattr(service, "clear_product_table_available_cache"):
+        service.clear_product_table_available_cache()
+
+    assert service.list_listing_owners(ListingOwnerFilters()) == service.list_listing_owners(
+        ListingOwnerFilters()
+    )
+    assert connect_count == 2
+
+
+def test_list_listing_owners_reuses_product_table_probe_across_pages(monkeypatch):
+    engine = create_engine("sqlite://")
+    statements = []
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT
+                )
+                """
+            )
+        )
+        for row_id in range(1, 52):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO amazon_listing_owner_config (
+                        id, store_site, listing, owner, listing_status
+                    )
+                    VALUES (:id, 'SAYOLA:US', :listing, '张三', '正常')
+                    """
+                ),
+                {"id": row_id, "listing": f"RB{row_id:03d}"},
+            )
+
+    def record_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(" ".join(statement.split()))
+
+    event.listen(engine, "before_cursor_execute", record_statement)
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    if hasattr(service, "clear_listing_owner_list_cache"):
+        service.clear_listing_owner_list_cache()
+    if hasattr(service, "clear_product_table_available_cache"):
+        service.clear_product_table_available_cache()
+
+    service.list_listing_owners(ListingOwnerFilters(page=1, page_size=50))
+    service.list_listing_owners(ListingOwnerFilters(page=2, page_size=50))
+
+    event.remove(engine, "before_cursor_execute", record_statement)
+    assert statements.count("SELECT 1 FROM amazon_product_info LIMIT 1") == 1
+
+
 def test_get_filter_options_returns_distinct_values(monkeypatch):
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
@@ -370,6 +514,55 @@ def test_get_filter_options_returns_distinct_values(monkeypatch):
         "inventory_age_assessments": ["否", "是"],
         "project_groups": ["项目组A", "项目组B"],
     }
+
+
+def test_get_filter_options_fetches_values_with_single_query(monkeypatch):
+    engine = create_engine("sqlite://")
+    statements = []
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    listing_maintainer TEXT,
+                    include_inventory_age_assessment TEXT,
+                    project_group TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    store_site, listing, owner, listing_status,
+                    listing_maintainer, include_inventory_age_assessment, project_group
+                )
+                VALUES
+                    ('SAYOLA:US', 'RB833', '张三', '正常', '李四', '是', '项目组A'),
+                    ('OTHER:US', 'RB831', '王五', '暂停', '赵六', '否', '项目组B')
+                """
+            )
+        )
+
+    def record_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(" ".join(statement.split()))
+
+    event.listen(engine, "before_cursor_execute", record_statement)
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_filter_options_cache()
+
+    options = service.get_filter_options()
+
+    event.remove(engine, "before_cursor_execute", record_statement)
+    assert options["store_sites"] == ["OTHER:US", "SAYOLA:US"]
+    assert len(statements) == 1
 
 
 def test_get_filter_options_reuses_cached_values(monkeypatch):

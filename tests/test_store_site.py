@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -52,6 +53,22 @@ def test_store_site_list_renders_rows(monkeypatch):
     assert "/data-quality?store_site=SAYOLA%3AUS" in response.text
     assert "日志" in response.text
     assert "/operation-logs?table_name=amazon_store_site&amp;record_id=1" in response.text
+
+
+def test_store_site_list_uses_layered_operational_layout():
+    template = Path("app/templates/store_site/list.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "store-site-workbench" in template
+    assert "ops-filter-panel" in template
+    assert "store-site-results-panel" in template
+    assert "ops-results-heading" in template
+    assert "store-site-table" in template
+    assert ".ops-workbench" in app_css
+    assert ".ops-filter-panel" in app_css
+    assert ".ops-results-panel" in app_css
+    assert ".data-table.ops-list-table" in app_css
+    assert ".ops-list-table .table-row:hover" in app_css
 
 
 def test_store_site_new_page_renders_create_form():

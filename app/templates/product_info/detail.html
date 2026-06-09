@@ -10,7 +10,8 @@
   {% set owner = detail.owner %}
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
 
-  <section class="content-panel detail-hero mb-4">
+  <div class="product-detail-workbench">
+  <section class="content-panel detail-hero product-detail-hero">
     <div class="detail-hero-grid">
       <div>
         <a class="detail-back-link" href="/">返回产品列表</a>
@@ -36,9 +37,9 @@
     </div>
   </section>
 
-  <div class="grid gap-4 xl:grid-cols-3">
+  <div class="grid gap-4 xl:grid-cols-3 product-detail-main-grid">
     <div class="space-y-4 xl:col-span-2">
-      <section class="content-panel">
+      <section class="content-panel product-detail-section">
         <div class="detail-panel-heading">
           <h3 class="detail-panel-title">关键定位字段</h3>
           <p class="detail-panel-subtitle">用于唯一定位产品和关联配置。</p>
@@ -50,7 +51,7 @@
         </dl>
       </section>
 
-      <section class="content-panel">
+      <section class="content-panel product-detail-section">
         <div class="detail-panel-heading">
           <h3 class="detail-panel-title">基础信息</h3>
           <p class="detail-panel-subtitle">Amazon 标识、SKU 和品牌信息。</p>
@@ -65,7 +66,7 @@
         </dl>
       </section>
 
-      <section class="content-panel">
+      <section class="content-panel product-detail-section">
         <div class="detail-panel-heading">
           <h3 class="detail-panel-title">运营维护</h3>
           <p class="detail-panel-subtitle">运营状态、分类和系统更新时间。</p>
@@ -90,7 +91,7 @@
     </div>
 
     <aside class="space-y-4">
-      <section class="content-panel relation-panel">
+      <section class="content-panel relation-panel product-detail-section">
         <div class="detail-panel-heading">
           <h3 class="detail-panel-title">业务关系</h3>
           <p class="detail-panel-subtitle">当前产品在三张核心表里的关联状态。</p>
@@ -115,7 +116,7 @@
         </div>
       </section>
 
-      <section class="content-panel relation-panel">
+      <section class="content-panel relation-panel product-detail-section">
         <div class="detail-panel-heading">
           <h3 class="detail-panel-title">店铺站点</h3>
           <p class="detail-panel-subtitle">当前产品关联的店铺配置。</p>
@@ -133,7 +134,7 @@
         </div>
       </section>
 
-      <section class="content-panel relation-panel">
+      <section class="content-panel relation-panel product-detail-section">
         <div class="detail-panel-heading">
           <h3 class="detail-panel-title">Listing 负责人</h3>
           <p class="detail-panel-subtitle">当前 Listing 的维护归属。</p>
@@ -172,7 +173,7 @@
     </aside>
   </div>
 
-  <section class="content-panel mt-4">
+  <section class="content-panel product-detail-section">
     <div class="detail-panel-heading">
       <h3 class="detail-panel-title">备注信息</h3>
       <p class="detail-panel-subtitle">运营协作中需要保留的补充说明。</p>
@@ -192,4 +193,5 @@
       </div>
     </div>
   </section>
+  </div>
 {% endblock %}

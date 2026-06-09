@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -57,13 +58,25 @@ def test_admin_user_list_renders_rows_without_password_hash(monkeypatch):
     assert "admin" in response.text
     assert "viewer" in response.text
     assert "password_hash" not in response.text
-    assert 'class="panel-heading"' in response.text
-    assert 'class="data-table text-sm"' in response.text
+    assert 'class="panel-heading ops-results-heading admin-user-results-heading"' in response.text
+    assert 'class="data-table ops-list-table admin-user-table text-sm"' in response.text
     assert 'class="row-actions"' in response.text
     assert "/admin-users/1/edit" in response.text
     assert "/admin-users/1/reset-password" in response.text
     assert "启用" in response.text
     assert "停用" in response.text
+
+
+def test_admin_user_list_uses_layered_operational_layout():
+    template = Path("app/templates/admin_user/list.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "ops-workbench admin-user-workbench" in template
+    assert "ops-results-panel admin-user-results-panel" in template
+    assert "ops-results-heading admin-user-results-heading" in template
+    assert "ops-list-table admin-user-table" in template
+    assert ".admin-user-workbench.ops-workbench" in app_css
+    assert ".admin-user-results-panel" in app_css
 
 
 def test_list_admin_users_returns_safe_fields(monkeypatch):
@@ -121,7 +134,7 @@ def test_admin_user_new_page_renders_create_form():
     assert "name=\"password\"" in response.text
     assert "name=\"role\"" in response.text
     assert "name=\"is_active\"" in response.text
-    assert 'class="form-shell"' in response.text
+    assert 'class="form-shell account-form-shell"' in response.text
     assert 'class="form-section"' in response.text
     assert 'class="form-actions"' in response.text
 
@@ -222,7 +235,7 @@ def test_admin_user_edit_page_renders_role_and_status_only(monkeypatch):
     assert "name=\"is_active\"" in response.text
     assert "name=\"username\"" not in response.text
     assert "name=\"password\"" not in response.text
-    assert 'class="form-shell"' in response.text
+    assert 'class="form-shell account-form-shell"' in response.text
     assert 'class="form-section"' in response.text
     assert 'class="form-actions"' in response.text
 
@@ -336,7 +349,7 @@ def test_admin_user_reset_password_page_renders_password_only(monkeypatch):
     assert "name=\"username\"" not in response.text
     assert "name=\"role\"" not in response.text
     assert "name=\"is_active\"" not in response.text
-    assert 'class="form-shell"' in response.text
+    assert 'class="form-shell account-form-shell"' in response.text
     assert 'class="form-section"' in response.text
     assert 'class="form-actions"' in response.text
 

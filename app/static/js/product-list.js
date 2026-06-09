@@ -60,8 +60,8 @@
   const savedExportFields = Array.isArray(config.savedExportFields) ? config.savedExportFields : defaultExportFields;
   const table = document.querySelector("[data-product-list-table]");
   const exportDownload = document.querySelector("[data-export-download]");
-  const exportFieldsButton = document.querySelector("[data-export-fields-button]");
-  const exportFieldsPanel = document.querySelector("[data-export-fields-panel]");
+  const exportFieldsModal = document.querySelector("[data-export-fields-modal]");
+  const exportFieldsConfirm = document.querySelector("[data-export-fields-confirm]");
   const exportFieldsReset = document.querySelector("[data-export-fields-reset]");
   const settingsButton = document.querySelector("[data-column-settings-button]");
   const settingsPanel = document.querySelector("[data-column-settings-panel]");
@@ -149,10 +149,29 @@
     return `${url.pathname}${url.search}`;
   };
 
-  exportFieldsButton?.addEventListener("click", () => {
-    const isHidden = exportFieldsPanel?.classList.toggle("hidden");
-    exportFieldsButton.setAttribute("aria-expanded", String(!isHidden));
-  });
+  let exportFieldsReturnFocus = null;
+
+  const openExportFieldsModal = (trigger) => {
+    if (!exportFieldsModal) {
+      return;
+    }
+    exportFieldsReturnFocus = trigger instanceof HTMLElement ? trigger : null;
+    exportFieldsModal.classList.remove("hidden");
+    exportFieldsModal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("is-modal-open");
+    exportFieldsConfirm?.focus();
+  };
+
+  const closeExportFieldsModal = () => {
+    if (!exportFieldsModal) {
+      return;
+    }
+    exportFieldsModal.classList.add("hidden");
+    exportFieldsModal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("is-modal-open");
+    exportFieldsReturnFocus?.focus();
+    exportFieldsReturnFocus = null;
+  };
 
   exportFieldsReset?.addEventListener("click", () => {
     document.querySelectorAll("[data-export-field]").forEach((field) => {
@@ -168,7 +187,26 @@
 
   exportDownload?.addEventListener("click", (event) => {
     event.preventDefault();
+    openExportFieldsModal(exportDownload);
+  });
+
+  exportFieldsConfirm?.addEventListener("click", () => {
+    if (!selectedExportFields().length) {
+      showPreferenceFeedback("请至少选择一个导出字段。", "error");
+      return;
+    }
+    showPreferenceFeedback("正在准备导出...", "info", 0);
     window.location.href = buildExportUrl();
+  });
+
+  document.querySelectorAll("[data-export-fields-cancel], [data-export-fields-dismiss]").forEach((element) => {
+    element.addEventListener("click", closeExportFieldsModal);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && exportFieldsModal && !exportFieldsModal.classList.contains("hidden")) {
+      closeExportFieldsModal();
+    }
   });
 
   const filterKeys = [

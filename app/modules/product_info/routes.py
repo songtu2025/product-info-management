@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -6,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from app.core.config import get_settings
 from app.core.security import current_user, require_admin
 from app.core.templates import templates
-from app.modules.data_quality.service import get_product_quality_report
+from app.modules.data_quality.service import get_product_quality_summary
 from app.modules.listing_owner.service import bulk_assign_listing_owner_from_products
 from app.modules.product_info.service import (
     DuplicateProductError,
@@ -50,6 +51,11 @@ FILTER_VIEW_FIELDS = (
     "listing_owner_status",
     "project_group",
     "page_size",
+)
+PREFERENCE_KEYS = (
+    EXPORT_FIELD_PREFERENCE_KEY,
+    COLUMN_PREFERENCE_KEY,
+    FILTER_VIEW_PREFERENCE_KEY,
 )
 
 
@@ -103,10 +109,20 @@ def product_list(
         page=page,
         page_size=page_size,
     )
-    products = list_products(filters)
-    options = get_filter_options()
-    quality_report = get_product_quality_report()
-    quality_issue_total = sum(int(issue.get("count") or 0) for issue in quality_report.get("issues", []))
+    username = _preference_username(request)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        products_future = executor.submit(list_products, filters)
+        options_future = executor.submit(get_filter_options)
+        quality_summary_future = executor.submit(get_product_quality_summary)
+        preferences_future = (
+            executor.submit(get_user_preferences, username, PREFERENCE_KEYS)
+            if username
+            else None
+        )
+        products = products_future.result()
+        options = options_future.result()
+        quality_summary = quality_summary_future.result()
+        preferences = preferences_future.result() if preferences_future else {}
     normalized_filters = ProductFilters(
         q=filters.q,
         store_site=filters.store_site,
@@ -118,15 +134,6 @@ def product_list(
         project_group=filters.project_group,
         page=int(products["page"]),
         page_size=int(products["page_size"]),
-    )
-    username = _preference_username(request)
-    preferences = (
-        get_user_preferences(
-            username,
-            [EXPORT_FIELD_PREFERENCE_KEY, COLUMN_PREFERENCE_KEY, FILTER_VIEW_PREFERENCE_KEY],
-        )
-        if username
-        else {}
     )
     export_field_state = preferences.get(EXPORT_FIELD_PREFERENCE_KEY, {})
     saved_filter_views = _saved_filter_views(preferences.get(FILTER_VIEW_PREFERENCE_KEY, {}))
@@ -140,9 +147,9 @@ def product_list(
             "filters": filters,
             "products": products,
             "dashboard": {
-                "product_total": quality_report.get("total", products["total"]),
+                "product_total": quality_summary.get("total", products["total"]),
                 "filtered_total": products["total"],
-                "quality_issue_total": quality_issue_total,
+                "quality_issue_total": quality_summary.get("quality_issue_total", 0),
             },
             "product_list_columns": PRODUCT_LIST_COLUMNS,
             "product_export_columns": PRODUCT_ALL_COLUMNS,

@@ -3,7 +3,7 @@ from io import BytesIO
 
 import pytest
 from openpyxl import load_workbook
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 
 from app.modules.product_info import service
 from app.modules.product_info.service import (
@@ -183,6 +183,84 @@ def test_list_products_returns_lightweight_table_fields(monkeypatch):
     assert "listing_maintainer" not in rows[0]
     assert "include_inventory_age_assessment" not in rows[0]
     assert rows[0]["project_group"] == "GroupA"
+
+
+def test_list_products_avoids_owner_join_until_current_page_needs_owner_fields(monkeypatch):
+    engine = create_engine("sqlite://")
+    statements = []
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    asin TEXT,
+                    msku TEXT,
+                    store_site TEXT,
+                    product_name TEXT,
+                    sku TEXT,
+                    brand TEXT,
+                    sales_status TEXT,
+                    listing TEXT,
+                    updated_at TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    listing TEXT,
+                    owner TEXT,
+                    listing_status TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (
+                    id, asin, msku, store_site, product_name, sku, brand, sales_status, listing, updated_at
+                )
+                VALUES
+                    (1, 'B001', 'MSKU-001', 'SAYOLA:US', 'Product A', 'SKU-001', 'BrandA', '在售', 'RB833', '2026-06-02'),
+                    (2, 'B002', 'MSKU-002', 'SAYOLA:US', 'Product B', 'SKU-002', 'BrandA', '在售', 'RB832', '2026-06-01')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (
+                    store_site, listing, owner, listing_status, project_group
+                )
+                VALUES ('SAYOLA:US', 'RB833', 'OwnerA', 'Active', 'GroupA')
+                """
+            )
+        )
+
+    def record_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(" ".join(statement.split()))
+
+    event.listen(engine, "before_cursor_execute", record_statement)
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_product_list_cache()
+
+    page = list_products(ProductFilters())
+
+    event.remove(engine, "before_cursor_execute", record_statement)
+    assert page["rows"][0]["listing_owner"] == "OwnerA"
+    assert page["rows"][0]["listing_owner_status"] == "Active"
+    assert page["rows"][0]["project_group"] == "GroupA"
+    assert not any(
+        "FROM amazon_product_info p LEFT JOIN amazon_listing_owner_config" in statement
+        for statement in statements
+    )
 
 
 def test_get_product_detail_returns_related_store_and_listing_owner(monkeypatch):
@@ -789,6 +867,71 @@ def test_get_filter_options_reuses_cached_values(monkeypatch):
 
     assert first == second
     assert connect_count == 1
+
+
+def test_get_filter_options_fetches_values_with_single_query(monkeypatch):
+    engine = create_engine("sqlite://")
+    statements = []
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_product_info (
+                    id INTEGER PRIMARY KEY,
+                    store_site TEXT,
+                    brand TEXT,
+                    sales_status TEXT,
+                    listing TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE amazon_listing_owner_config (
+                    id INTEGER PRIMARY KEY,
+                    owner TEXT,
+                    listing_status TEXT,
+                    project_group TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_product_info (store_site, brand, sales_status, listing)
+                VALUES
+                    ('SAYOLA:US', 'BrandA', '在售', 'RB833'),
+                    ('OTHER:US', 'BrandB', '停售', 'RB832')
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO amazon_listing_owner_config (owner, listing_status, project_group)
+                VALUES
+                    ('OwnerA', 'Active', 'GroupA'),
+                    ('OwnerB', 'Paused', 'GroupB')
+                """
+            )
+        )
+
+    def record_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(" ".join(statement.split()))
+
+    event.listen(engine, "before_cursor_execute", record_statement)
+    monkeypatch.setattr(service, "get_engine", lambda: engine)
+    service.clear_filter_options_cache()
+
+    options = service.get_filter_options()
+
+    event.remove(engine, "before_cursor_execute", record_statement)
+    assert options["store_sites"] == ["OTHER:US", "SAYOLA:US"]
+    assert options["listing_owners"] == ["OwnerA", "OwnerB"]
+    assert len(statements) == 1
 
 
 def test_create_product_rejects_second_locked_msku_for_same_store_site_sku(monkeypatch):

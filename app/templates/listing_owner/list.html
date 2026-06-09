@@ -2,22 +2,20 @@
 
 {% block content %}
   {% set can_edit = request.app.state.disable_auth or (request.session.get("user") and request.session.get("user").role == "admin") %}
-  <form class="filter-panel mb-4" method="get">
+  <div class="ops-workbench listing-owner-workbench">
+  <form class="filter-panel ops-filter-panel listing-owner-filter-panel" method="get">
     <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
       <div>
         <h2 class="text-base font-bold text-slate-950">筛选负责人配置</h2>
         <p class="mt-1 text-sm text-slate-500">按店铺站点、Listing、负责人、状态、维护人或项目组搜索。</p>
       </div>
       <div class="flex gap-2">
-        {% if can_edit %}
-        <a class="btn-secondary" href="/listing-owners/new">新增 Listing 负责人</a>
-        {% endif %}
         <button class="btn-primary" type="submit">查询</button>
         <a class="btn-secondary" href="/listing-owners">重置</a>
       </div>
     </div>
 
-    <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+    <div class="listing-owner-filter-grid grid gap-3">
       <label class="field md:col-span-2">
         <span class="field-label">关键词</span>
         <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="店铺站点 / Listing / 负责人 / 状态 / 维护人 / 项目组">
@@ -87,18 +85,21 @@
     </div>
   </form>
 
-  <div class="content-panel">
-    <div class="panel-heading">
+  <div class="content-panel ops-results-panel listing-owner-results-panel">
+    <div class="panel-heading ops-results-heading">
       <div>
         <h2 class="panel-title">Listing 负责人</h2>
         <p class="panel-subtitle">
           共 {{ owners.total }} 条，每页 {{ owners.page_size }} 行，当前第 {{ owners.page }} 页。店铺站点和 Listing 暂不允许编辑。
         </p>
       </div>
+      {% if can_edit %}
+        <a class="btn-primary" href="/listing-owners/new">新增 Listing 负责人</a>
+      {% endif %}
     </div>
 
     <div class="table-wrap">
-      <table class="data-table text-sm">
+      <table class="data-table ops-list-table listing-owner-table text-sm">
         <thead class="text-left">
           <tr>
             <th class="table-head">店铺/站点</th>
@@ -175,8 +176,8 @@
       </table>
     </div>
 
-    <div class="flex flex-col gap-3 px-4 py-3 text-sm lg:flex-row lg:items-center lg:justify-between">
-      <div class="flex flex-wrap items-center gap-2">
+    <div class="pagination-bar">
+      <div class="pagination-actions">
         <a
           class="btn-secondary {% if owners.page <= 1 %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.first_url }}"
@@ -205,7 +206,7 @@
           {% if owners.pages == 0 or owners.page >= owners.pages %}aria-disabled="true" tabindex="-1"{% endif %}
         >末页</a>
       </div>
-      <form class="flex items-center gap-2" method="get">
+      <form class="page-jump" method="get">
         <input name="q" type="hidden" value="{{ filters.q or '' }}">
         <input name="store_site" type="hidden" value="{{ filters.store_site or '' }}">
         <input name="owner" type="hidden" value="{{ filters.owner or '' }}">
@@ -226,5 +227,6 @@
         <button class="btn-secondary" type="submit">跳转</button>
       </form>
     </div>
+  </div>
   </div>
 {% endblock %}

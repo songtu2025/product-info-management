@@ -160,6 +160,11 @@ PRODUCT_COLUMN_EXPRESSIONS.update(
 )
 LIST_FIELD_KEYS = ("id", *tuple(column["key"] for column in PRODUCT_LIST_COLUMNS))
 LIST_COLUMNS = ",\n    ".join(PRODUCT_COLUMN_EXPRESSIONS[key] for key in LIST_FIELD_KEYS)
+OWNER_LIST_FIELD_KEYS = {"listing_owner", "listing_owner_status", "project_group"}
+BASE_LIST_COLUMNS = ",\n    ".join(
+    f"NULL AS {key}" if key in OWNER_LIST_FIELD_KEYS else PRODUCT_COLUMN_EXPRESSIONS[key]
+    for key in LIST_FIELD_KEYS
+)
 
 EDITABLE_FIELDS = (
     "product_name",
@@ -229,11 +234,14 @@ def list_products(filters: ProductFilters) -> dict[str, object]:
     offset = (filters.page - 1) * filters.page_size
     params.update({"limit": filters.page_size, "offset": offset})
 
-    count_sql = text(f"SELECT COUNT(*) {PRODUCT_OWNER_JOIN_SQL} {where_sql}")
+    needs_owner_join = _requires_owner_join(filters)
+    from_sql = PRODUCT_OWNER_JOIN_SQL if needs_owner_join else "FROM amazon_product_info p"
+    list_columns = LIST_COLUMNS if needs_owner_join else BASE_LIST_COLUMNS
+    count_sql = text(f"SELECT COUNT(*) {from_sql} {where_sql}")
     list_sql = text(
         f"""
-        SELECT {LIST_COLUMNS}
-        {PRODUCT_OWNER_JOIN_SQL}
+        SELECT {list_columns}
+        {from_sql}
         {where_sql}
         ORDER BY p.updated_at DESC, p.id DESC
         LIMIT :limit OFFSET :offset
@@ -243,6 +251,8 @@ def list_products(filters: ProductFilters) -> dict[str, object]:
     with engine.connect() as conn:
         total = conn.execute(count_sql, params).scalar_one()
         rows = [dict(row) for row in conn.execute(list_sql, params).mappings()]
+        if not needs_owner_join:
+            _attach_listing_owner_fields(conn, rows)
 
     pages = ceil(total / filters.page_size) if total else 0
     page = {
@@ -338,15 +348,7 @@ def resolve_export_columns(export_fields: list[str] | tuple[str, ...] | None = N
 def get_filter_options() -> dict[str, list[str]]:
     engine = get_engine()
     if engine is None:
-        return {
-            "store_sites": [],
-            "brands": [],
-            "sales_statuses": [],
-            "listings": [],
-            "listing_owners": [],
-            "listing_owner_statuses": [],
-            "project_groups": [],
-        }
+        return _empty_filter_options()
     now = monotonic()
     engine_id = id(engine)
     if (
@@ -356,21 +358,80 @@ def get_filter_options() -> dict[str, list[str]]:
     ):
         return _filter_options_cache["value"]
 
-    queries = {
-        "store_sites": "SELECT DISTINCT store_site FROM amazon_product_info WHERE store_site IS NOT NULL AND store_site <> '' ORDER BY store_site LIMIT 200",
-        "brands": "SELECT DISTINCT brand FROM amazon_product_info WHERE brand IS NOT NULL AND brand <> '' ORDER BY brand LIMIT 200",
-        "sales_statuses": "SELECT DISTINCT sales_status FROM amazon_product_info WHERE sales_status IS NOT NULL AND sales_status <> '' ORDER BY sales_status LIMIT 100",
-        "listings": "SELECT DISTINCT listing FROM amazon_product_info WHERE listing IS NOT NULL AND listing <> '' ORDER BY listing LIMIT 300",
-        "listing_owners": "SELECT DISTINCT owner FROM amazon_listing_owner_config WHERE owner IS NOT NULL AND owner <> '' ORDER BY owner LIMIT 300",
-        "listing_owner_statuses": "SELECT DISTINCT listing_status FROM amazon_listing_owner_config WHERE listing_status IS NOT NULL AND listing_status <> '' ORDER BY listing_status LIMIT 100",
-        "project_groups": "SELECT DISTINCT project_group FROM amazon_listing_owner_config WHERE project_group IS NOT NULL AND project_group <> '' ORDER BY project_group LIMIT 100",
-    }
-
+    query = text(
+        """
+        SELECT option_key, value
+        FROM (
+            SELECT 'store_sites' AS option_key, value, 1 AS sort_order
+            FROM (
+                SELECT DISTINCT store_site AS value
+                FROM amazon_product_info
+                WHERE store_site IS NOT NULL AND store_site <> ''
+                ORDER BY store_site
+                LIMIT 200
+            ) store_sites
+            UNION ALL
+            SELECT 'brands' AS option_key, value, 2 AS sort_order
+            FROM (
+                SELECT DISTINCT brand AS value
+                FROM amazon_product_info
+                WHERE brand IS NOT NULL AND brand <> ''
+                ORDER BY brand
+                LIMIT 200
+            ) brands
+            UNION ALL
+            SELECT 'sales_statuses' AS option_key, value, 3 AS sort_order
+            FROM (
+                SELECT DISTINCT sales_status AS value
+                FROM amazon_product_info
+                WHERE sales_status IS NOT NULL AND sales_status <> ''
+                ORDER BY sales_status
+                LIMIT 100
+            ) sales_statuses
+            UNION ALL
+            SELECT 'listings' AS option_key, value, 4 AS sort_order
+            FROM (
+                SELECT DISTINCT listing AS value
+                FROM amazon_product_info
+                WHERE listing IS NOT NULL AND listing <> ''
+                ORDER BY listing
+                LIMIT 300
+            ) listings
+            UNION ALL
+            SELECT 'listing_owners' AS option_key, value, 5 AS sort_order
+            FROM (
+                SELECT DISTINCT owner AS value
+                FROM amazon_listing_owner_config
+                WHERE owner IS NOT NULL AND owner <> ''
+                ORDER BY owner
+                LIMIT 300
+            ) listing_owners
+            UNION ALL
+            SELECT 'listing_owner_statuses' AS option_key, value, 6 AS sort_order
+            FROM (
+                SELECT DISTINCT listing_status AS value
+                FROM amazon_listing_owner_config
+                WHERE listing_status IS NOT NULL AND listing_status <> ''
+                ORDER BY listing_status
+                LIMIT 100
+            ) listing_owner_statuses
+            UNION ALL
+            SELECT 'project_groups' AS option_key, value, 7 AS sort_order
+            FROM (
+                SELECT DISTINCT project_group AS value
+                FROM amazon_listing_owner_config
+                WHERE project_group IS NOT NULL AND project_group <> ''
+                ORDER BY project_group
+                LIMIT 100
+            ) project_groups
+        ) options
+        ORDER BY sort_order, value
+        """
+    )
     with engine.connect() as conn:
-        options = {
-            name: [row[0] for row in conn.execute(text(sql)).all()]
-            for name, sql in queries.items()
-        }
+        options = _empty_filter_options()
+        for row in conn.execute(query).mappings():
+            options[row["option_key"]].append(row["value"])
     _filter_options_cache.update(
         {
             "engine_id": engine_id,
@@ -720,6 +781,54 @@ def _product_list_cache_key(engine, filters: ProductFilters) -> tuple[object, ..
     )
 
 
+def _requires_owner_join(filters: ProductFilters) -> bool:
+    return bool(filters.q or filters.listing_owner or filters.listing_owner_status or filters.project_group)
+
+
+def _attach_listing_owner_fields(conn, rows: list[dict[str, object]]) -> None:
+    pairs = []
+    for row in rows:
+        pair = (row.get("store_site"), row.get("listing"))
+        if pair[0] and pair[1] and pair not in pairs:
+            pairs.append(pair)
+    if not pairs:
+        return
+
+    clauses = []
+    params = {}
+    for index, (store_site, listing) in enumerate(pairs):
+        clauses.append(f"(store_site = :store_site_{index} AND listing = :listing_{index})")
+        params[f"store_site_{index}"] = store_site
+        params[f"listing_{index}"] = listing
+
+    owner_sql = text(
+        f"""
+        SELECT
+            store_site,
+            listing,
+            owner AS listing_owner,
+            listing_status AS listing_owner_status,
+            project_group AS project_group
+        FROM amazon_listing_owner_config
+        WHERE {" OR ".join(clauses)}
+        """
+    )
+    owners = {
+        (row["store_site"], row["listing"]): dict(row)
+        for row in conn.execute(owner_sql, params).mappings()
+    }
+    for row in rows:
+        owner = owners.get((row.get("store_site"), row.get("listing")))
+        if owner:
+            row.update(
+                {
+                    "listing_owner": owner["listing_owner"],
+                    "listing_owner_status": owner["listing_owner_status"],
+                    "project_group": owner["project_group"],
+                }
+            )
+
+
 def _build_where(filters: ProductFilters) -> tuple[str, dict[str, object]]:
     clauses = []
     params: dict[str, object] = {}
@@ -810,4 +919,16 @@ def _empty_page(filters: ProductFilters) -> dict[str, object]:
         "page": filters.page,
         "page_size": filters.page_size,
         "pages": 0,
+    }
+
+
+def _empty_filter_options() -> dict[str, list[str]]:
+    return {
+        "store_sites": [],
+        "brands": [],
+        "sales_statuses": [],
+        "listings": [],
+        "listing_owners": [],
+        "listing_owner_statuses": [],
+        "project_groups": [],
     }

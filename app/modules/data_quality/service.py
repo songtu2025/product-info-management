@@ -11,6 +11,8 @@ from app.core.db import get_engine
 
 QUALITY_REPORT_CACHE_TTL_SECONDS = 60
 _quality_report_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.0, "value": None}
+QUALITY_SUMMARY_CACHE_TTL_SECONDS = 60
+_quality_summary_cache: dict[str, object] = {"engine_id": None, "expires_at": 0.0, "value": None}
 QUALITY_RULES = (
     ("missing_asin", "缺 ASIN", "asin"),
     ("missing_listing", "缺 Listing", "listing"),
@@ -108,6 +110,102 @@ def get_product_quality_report(store_site: str | None = None) -> dict[str, objec
 
 def clear_quality_report_cache() -> None:
     _quality_report_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
+    _quality_summary_cache.update({"engine_id": None, "expires_at": 0.0, "value": None})
+
+
+def get_product_quality_summary() -> dict[str, int]:
+    engine = get_engine()
+    if engine is None:
+        return {"total": 0, "quality_issue_total": 0}
+    now = monotonic()
+    engine_id = id(engine)
+    if (
+        _quality_summary_cache["engine_id"] == engine_id
+        and _quality_summary_cache["value"] is not None
+        and now < _quality_summary_cache["expires_at"]
+    ):
+        return _quality_summary_cache["value"]
+
+    summary_sql = text(
+        """
+        SELECT
+            (SELECT COUNT(*) FROM amazon_product_info) AS total,
+            (SELECT COUNT(*) FROM amazon_product_info p WHERE p.asin IS NULL OR TRIM(p.asin) = '') AS missing_asin,
+            (SELECT COUNT(*) FROM amazon_product_info p WHERE p.listing IS NULL OR TRIM(p.listing) = '') AS missing_listing,
+            (SELECT COUNT(*) FROM amazon_product_info p WHERE p.brand IS NULL OR TRIM(p.brand) = '') AS missing_brand,
+            (SELECT COUNT(*) FROM amazon_product_info p WHERE p.sales_status IS NULL OR TRIM(p.sales_status) = '') AS missing_sales_status,
+            (SELECT COUNT(*) FROM amazon_product_info p WHERE p.product_name IS NULL OR TRIM(p.product_name) = '') AS missing_product_name,
+            (
+                SELECT COUNT(*)
+                FROM amazon_product_info p
+                LEFT JOIN amazon_listing_owner_config lo
+                  ON p.store_site = lo.store_site
+                 AND p.listing = lo.listing
+                WHERE p.listing IS NOT NULL
+                  AND TRIM(p.listing) <> ''
+                  AND lo.id IS NULL
+            ) AS missing_listing_owner_config,
+            (
+                SELECT COUNT(*)
+                FROM amazon_listing_owner_config lo
+                LEFT JOIN amazon_product_info p
+                  ON p.store_site = lo.store_site
+                 AND p.listing = lo.listing
+                WHERE p.id IS NULL
+            ) AS orphan_listing_owner_config,
+            (
+                SELECT COUNT(*)
+                FROM amazon_product_info p
+                LEFT JOIN amazon_store_site ss
+                  ON p.store_site = ss.store_site
+                WHERE p.store_site IS NOT NULL
+                  AND TRIM(p.store_site) <> ''
+                  AND ss.id IS NULL
+            ) AS unknown_product_store_site,
+            (
+                SELECT COUNT(*)
+                FROM amazon_listing_owner_config lo
+                LEFT JOIN amazon_store_site ss
+                  ON lo.store_site = ss.store_site
+                WHERE lo.store_site IS NOT NULL
+                  AND TRIM(lo.store_site) <> ''
+                  AND ss.id IS NULL
+            ) AS unknown_listing_owner_store_site
+        """
+    )
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(summary_sql).mappings().one()
+    except SQLAlchemyError:
+        report = get_product_quality_report()
+        return {
+            "total": int(report.get("total") or 0),
+            "quality_issue_total": sum(int(issue.get("count") or 0) for issue in report.get("issues", [])),
+        }
+
+    quality_issue_total = sum(
+        int(row[key] or 0)
+        for key in (
+            "missing_asin",
+            "missing_listing",
+            "missing_brand",
+            "missing_sales_status",
+            "missing_product_name",
+            "missing_listing_owner_config",
+            "orphan_listing_owner_config",
+            "unknown_product_store_site",
+            "unknown_listing_owner_store_site",
+        )
+    )
+    summary = {"total": int(row["total"] or 0), "quality_issue_total": quality_issue_total}
+    _quality_summary_cache.update(
+        {
+            "engine_id": engine_id,
+            "expires_at": now + QUALITY_SUMMARY_CACHE_TTL_SECONDS,
+            "value": summary,
+        }
+    )
+    return summary
 
 
 def build_quality_issue_workbook(report: dict[str, object]) -> bytes:
