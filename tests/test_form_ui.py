@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from pathlib import Path
 
 from app.main import app
 
@@ -45,6 +46,34 @@ def test_product_forms_use_unified_form_shell(monkeypatch):
         assert 'class="form-actions"' in response.text
         assert 'class="btn-secondary"' in response.text
         assert 'class="btn-primary"' in response.text
+
+
+def test_form_error_feedback_uses_unified_alert_structure():
+    template_paths = [
+        Path("app/templates/product_info/new.html"),
+        Path("app/templates/product_info/edit.html"),
+        Path("app/templates/store_site/new.html"),
+        Path("app/templates/store_site/edit.html"),
+        Path("app/templates/listing_owner/new.html"),
+        Path("app/templates/listing_owner/edit.html"),
+        Path("app/templates/admin_user/new.html"),
+        Path("app/templates/admin_user/edit.html"),
+        Path("app/templates/admin_user/reset_password.html"),
+    ]
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    for template_path in template_paths:
+        template = template_path.read_text(encoding="utf-8")
+        assert 'class="form-alert"' in template
+        assert 'role="alert"' in template
+        assert 'aria-live="assertive"' in template
+        assert 'class="form-alert-title"' in template
+        assert 'class="form-alert-message"' in template
+
+    assert ".form-alert-title" in css
+    assert ".form-alert-message" in css
+    assert ".read-only-strip" in css
+    assert ".required-mark" in css
 
 
 def test_config_forms_use_unified_form_shell(monkeypatch):

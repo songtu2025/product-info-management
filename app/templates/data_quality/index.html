@@ -135,7 +135,12 @@
                 </tr>
               {% else %}
                 <tr>
-                  <td class="quality-empty" colspan="4">暂无问题产品</td>
+                  <td colspan="4">
+                    <div class="empty-state empty-state-compact">
+                      <div class="empty-state-title">当前无异常</div>
+                      <div class="empty-state-copy">该项暂未发现需要补齐的产品字段。</div>
+                    </div>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -208,7 +213,12 @@
                 </tr>
               {% else %}
                 <tr>
-                  <td class="quality-empty" colspan="5">暂无关系问题</td>
+                  <td colspan="5">
+                    <div class="empty-state empty-state-compact">
+                      <div class="empty-state-title">当前无异常</div>
+                      <div class="empty-state-copy">该项暂未发现需要核对的业务关系。</div>
+                    </div>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>

@@ -1,0 +1,5 @@
+﻿Dev server ready: http://127.0.0.1:8002/
+ProcessId: 23352
+Stdout: D:\DataProject\coedx_project\产品信息维护\logs\dev-server-8002.out.log
+Stderr: D:\DataProject\coedx_project\产品信息维护\logs\dev-server-8002.err.log
+PidFile: D:\DataProject\coedx_project\产品信息维护\logs\dev-server-8002.pid

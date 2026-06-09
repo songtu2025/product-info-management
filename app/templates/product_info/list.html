@@ -201,6 +201,8 @@
               form="product-bulk-form"
               formaction="/products/bulk-lock"
               name="lock_status"
+              data-bulk-confirm
+              data-confirm-action="锁仓"
               type="submit"
               value="锁"
             >批量锁仓</button>
@@ -209,6 +211,8 @@
               form="product-bulk-form"
               formaction="/products/bulk-lock"
               name="lock_status"
+              data-bulk-confirm
+              data-confirm-action="解锁"
               type="submit"
               value=""
             >批量解锁</button>
@@ -228,6 +232,8 @@
               class="btn-secondary"
               form="product-bulk-form"
               formaction="/products/bulk-listing-owner"
+              data-bulk-confirm
+              data-confirm-action="设置负责人"
               type="submit"
             >批量负责人</button>
             <a class="btn-primary" href="{{ create_url }}">新增产品</a>
@@ -240,6 +246,7 @@
             aria-controls="product-column-settings"
           >字段设置</button>
         </div>
+        <span class="bulk-action-feedback" data-bulk-action-feedback hidden></span>
         <span>长文本和系统字段默认隐藏，可按需打开。</span>
       </div>
     </div>
@@ -392,7 +399,18 @@
               </tr>
             {% else %}
               <tr>
-                <td class="px-4 py-8 text-center text-slate-500" colspan="{{ product_list_columns|length + 1 + (1 if can_edit else 0) }}">没有匹配的产品数据</td>
+                <td colspan="{{ product_list_columns|length + 1 + (1 if can_edit else 0) }}">
+                  <div class="empty-state">
+                    <div class="empty-state-title">没有匹配的产品数据</div>
+                    <div class="empty-state-copy">可以调整筛选条件，或清空筛选后重新查看全部产品。</div>
+                    <div class="empty-state-actions">
+                      <a class="btn-secondary" href="/">清空筛选</a>
+                      {% if can_edit %}
+                        <a class="btn-primary" href="{{ create_url }}">新增产品</a>
+                      {% endif %}
+                    </div>
+                  </div>
+                </td>
               </tr>
             {% endfor %}
           </tbody>
@@ -405,24 +423,29 @@
         <a
           class="btn-secondary {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.first_url }}"
+          {% if products.page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}
         >首页</a>
         <a
           class="btn-secondary {% if products.page <= 1 %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.prev_url }}"
+          {% if products.page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}
         >上一页</a>
         {% for item in pagination.page_numbers %}
           <a
             class="btn-secondary {% if item.page == products.page %}bg-slate-900 text-white{% endif %}"
             href="{{ item.url }}"
+            {% if item.page == products.page %}aria-current="page"{% endif %}
           >{{ item.page }}</a>
         {% endfor %}
         <a
           class="btn-secondary {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.next_url }}"
+          {% if products.pages == 0 or products.page >= products.pages %}aria-disabled="true" tabindex="-1"{% endif %}
         >下一页</a>
         <a
           class="btn-secondary {% if products.pages == 0 or products.page >= products.pages %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.last_url }}"
+          {% if products.pages == 0 or products.page >= products.pages %}aria-disabled="true" tabindex="-1"{% endif %}
         >末页</a>
       </div>
       <form class="page-jump" method="get">

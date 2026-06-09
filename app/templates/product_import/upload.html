@@ -99,7 +99,11 @@
           <input type="hidden" name="import_token" value="{{ import_token }}">
           <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div class="text-sm text-emerald-800">校验通过，可确认写入数据库。</div>
-            <button class="btn-primary" type="submit">确认写入</button>
+            <button
+              class="btn-primary"
+              data-confirm="确认写入数据库？将更新 {{ preview.valid_count }} 行产品信息。"
+              type="submit"
+            >确认写入</button>
           </div>
         </form>
       {% endif %}

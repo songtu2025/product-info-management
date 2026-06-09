@@ -74,6 +74,152 @@ def test_partial_navigation_guards_downloads_and_stale_responses():
     assert "requestId !== latestRequestId" in partial_nav_js
 
 
+def test_frontend_feedback_shows_busy_state_for_navigation_and_forms():
+    layout_html = Path("app/templates/layout.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+
+    assert "data-page-status" in layout_html
+    assert 'role="status"' in layout_html
+    assert 'aria-live="polite"' in layout_html
+    assert ".page-status" in app_css
+    assert ".is-busy" in app_css
+    assert "setPageBusy" in partial_nav_js
+    assert "aria-busy" in partial_nav_js
+    assert "event.submitter" in partial_nav_js
+    assert "dataset.submitting" in partial_nav_js
+
+
+def test_frontend_accessibility_keeps_focus_and_disabled_pagination_semantics():
+    layout_html = Path("app/templates/layout.html").read_text(encoding="utf-8")
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+    product_list_html = Path("app/templates/product_info/list.html").read_text(encoding="utf-8")
+    owner_list_html = Path("app/templates/listing_owner/list.html").read_text(encoding="utf-8")
+
+    assert 'data-app-content tabindex="-1"' in layout_html
+    assert "content.focus({preventScroll: true})" in partial_nav_js
+    assert ":focus-visible" in app_css
+    assert "[data-app-content]:focus" in app_css
+
+    for template in [product_list_html, owner_list_html]:
+        assert template.count('aria-disabled="true"') >= 4
+        assert template.count('tabindex="-1"') >= 4
+        assert 'aria-current="page"' in template
+
+
+def test_partial_navigation_enters_target_page_pending_state_before_fetch():
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+
+    pending_call = "showPendingPage(url, label, pushState, loadingMessage);"
+    fetch_call = "const response = await fetch(url"
+
+    assert "showPendingPage" in partial_nav_js
+    assert "正在打开" in partial_nav_js
+    assert "pending-page" in partial_nav_js
+    assert pending_call in partial_nav_js
+    assert partial_nav_js.index(pending_call) < partial_nav_js.index(fetch_call)
+    assert ".pending-page" in app_css
+    assert ".pending-page-title" in app_css
+    assert ".pending-page-copy" in app_css
+
+
+def test_partial_navigation_uses_subtle_transition_animation():
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+
+    assert "showLoadedPage" in partial_nav_js
+    assert 'content.classList.add("is-content-entering")' in partial_nav_js
+    assert 'content.classList.remove("is-content-entering")' in partial_nav_js
+    assert "setTimeout" in partial_nav_js
+    assert "pending-page-line" in partial_nav_js
+
+    assert "@keyframes pending-page-enter" in app_css
+    assert "@keyframes page-content-enter" in app_css
+    assert "[data-app-content].is-content-entering" in app_css
+    assert ".pending-page-line" in app_css
+    assert "prefers-reduced-motion: reduce" in app_css
+    assert "animation: none" in app_css
+
+
+def test_partial_navigation_leaves_download_routes_to_browser():
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+
+    assert "isDownloadUrl" in partial_nav_js
+    assert 'link.hasAttribute("download")' in partial_nav_js
+    assert 'link.hasAttribute("data-export-download")' in partial_nav_js
+    assert 'url.pathname.startsWith("/products/export")' in partial_nav_js
+    assert 'url.pathname === "/products/import/template"' in partial_nav_js
+    assert 'url.pathname === "/products/import/issues"' in partial_nav_js
+    assert 'url.pathname === "/data-quality/export"' in partial_nav_js
+    assert "shouldUsePartial(url, link)" in partial_nav_js
+
+
+def test_product_list_preferences_show_save_feedback():
+    app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+    product_list_js = Path("app/static/js/product-list.js").read_text(encoding="utf-8")
+
+    assert "[data-page-status]" in product_list_js
+    assert "showPreferenceFeedback" in product_list_js
+    assert "savePreference" in product_list_js
+    assert "正在保存..." in product_list_js
+    assert "已保存。" in product_list_js
+    assert "保存失败，请稍后重试。" in product_list_js
+    assert "response.ok" in product_list_js
+    assert ".page-status-success" in app_css
+    assert ".page-status-error" in app_css
+
+
+def test_write_actions_require_confirmation_before_submit():
+    product_list_html = Path("app/templates/product_info/list.html").read_text(encoding="utf-8")
+    import_upload_html = Path("app/templates/product_import/upload.html").read_text(encoding="utf-8")
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+    product_list_js = Path("app/static/js/product-list.js").read_text(encoding="utf-8")
+
+    assert "data-confirm-action" in product_list_html
+    assert "data-bulk-confirm" in product_list_html
+    assert "data-bulk-action-feedback" in product_list_html
+    assert "data-confirm=" in import_upload_html
+    assert "写入数据库" in import_upload_html
+    assert "confirmSubmit" in partial_nav_js
+    assert "window.confirm" in partial_nav_js
+    assert 'document.addEventListener("submit", (event) => {\n    if (event.defaultPrevented)' in partial_nav_js
+    assert "event.preventDefault()" in partial_nav_js
+    assert "updateBulkConfirmMessages" in product_list_js
+    assert "showBulkActionFeedback" in product_list_js
+    assert "请先选择要操作的产品。" in product_list_js
+    assert "selectedCount" in product_list_js
+    assert "选中的" in product_list_js
+
+
+def test_empty_states_offer_clear_next_actions():
+    templates = [
+        Path("app/templates/product_info/list.html").read_text(encoding="utf-8"),
+        Path("app/templates/store_site/list.html").read_text(encoding="utf-8"),
+        Path("app/templates/listing_owner/list.html").read_text(encoding="utf-8"),
+        Path("app/templates/admin_user/list.html").read_text(encoding="utf-8"),
+        Path("app/templates/data_quality/index.html").read_text(encoding="utf-8"),
+    ]
+    css = Path("app/static/css/app.css").read_text(encoding="utf-8")
+
+    for template in templates:
+        assert "empty-state" in template
+        assert "empty-state-title" in template
+        assert "empty-state-copy" in template
+
+    assert "empty-state-actions" in templates[0]
+    assert "清空筛选" in templates[0]
+    assert "新增产品" in templates[0]
+    assert "新增店铺站点" in templates[1]
+    assert "新增 Listing 负责人" in templates[2]
+    assert "新增用户" in templates[3]
+    assert "当前无异常" in templates[4]
+    assert ".empty-state" in css
+    assert ".empty-state-title" in css
+    assert ".empty-state-actions" in css
+
+
 def test_health_endpoint_returns_ok():
     response = client.get("/health")
 

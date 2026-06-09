@@ -71,7 +71,18 @@
             </tr>
           {% else %}
             <tr>
-              <td class="px-4 py-8 text-center text-slate-500" colspan="9">没有匹配的店铺站点数据</td>
+              <td colspan="9">
+                <div class="empty-state">
+                  <div class="empty-state-title">没有匹配的店铺站点数据</div>
+                  <div class="empty-state-copy">可以重置搜索条件，或新增一个店铺站点映射。</div>
+                  <div class="empty-state-actions">
+                    <a class="btn-secondary" href="/store-sites">重置搜索</a>
+                    {% if can_edit %}
+                      <a class="btn-primary" href="/store-sites/new">新增店铺站点</a>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>

@@ -13,10 +13,44 @@
 
   const selectAll = document.querySelector("[data-bulk-select-all]");
   const checkboxes = Array.from(document.querySelectorAll("[data-bulk-product-id]"));
+  const bulkConfirmButtons = Array.from(document.querySelectorAll("[data-bulk-confirm]"));
+  const bulkForm = document.getElementById("product-bulk-form");
+  const bulkActionFeedback = document.querySelector("[data-bulk-action-feedback]");
+  const selectedCount = () => checkboxes.filter((checkbox) => checkbox.checked).length;
+  const showBulkActionFeedback = (message) => {
+    if (!bulkActionFeedback) {
+      return;
+    }
+    bulkActionFeedback.textContent = message;
+    bulkActionFeedback.hidden = false;
+  };
+  const updateBulkConfirmMessages = () => {
+    const count = selectedCount();
+    if (count && bulkActionFeedback) {
+      bulkActionFeedback.hidden = true;
+    }
+    bulkConfirmButtons.forEach((button) => {
+      const action = button.dataset.confirmAction || "操作";
+      button.dataset.confirm = count
+        ? `确认对选中的 ${count} 个产品执行${action}？`
+        : "";
+    });
+  };
   selectAll?.addEventListener("change", () => {
     checkboxes.forEach((checkbox) => {
       checkbox.checked = selectAll.checked;
     });
+    updateBulkConfirmMessages();
+  });
+  checkboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", updateBulkConfirmMessages);
+  });
+  updateBulkConfirmMessages();
+  bulkForm?.addEventListener("submit", (event) => {
+    if (event.submitter instanceof HTMLElement && event.submitter.matches("[data-bulk-confirm]") && !selectedCount()) {
+      event.preventDefault();
+      showBulkActionFeedback("请先选择要操作的产品。");
+    }
   });
 
   const storageKey = config.storageKey || "productListColumnState";
@@ -33,6 +67,7 @@
   const settingsPanel = document.querySelector("[data-column-settings-panel]");
   const settingsList = document.querySelector("[data-column-settings-list]");
   const resetButton = document.querySelector("[data-column-reset]");
+  const pageStatus = document.querySelector("[data-page-status]");
   const allKeys = Array.from(document.querySelectorAll("[data-column-toggle]")).map((toggle) => toggle.dataset.columnToggle);
   const resizers = Array.from(document.querySelectorAll("[data-resize-column]"));
   const filterForm = document.querySelector("form.filter-panel");
@@ -52,17 +87,57 @@
     return;
   }
 
+  let preferenceFeedbackTimer = null;
+  const showPreferenceFeedback = (message, type = "info", timeout = 2200) => {
+    if (!pageStatus) {
+      return;
+    }
+    window.clearTimeout(preferenceFeedbackTimer);
+    pageStatus.textContent = message;
+    pageStatus.hidden = false;
+    pageStatus.classList.remove("page-status-success", "page-status-error");
+    if (type === "success") {
+      pageStatus.classList.add("page-status-success");
+    }
+    if (type === "error") {
+      pageStatus.classList.add("page-status-error");
+    }
+    if (timeout > 0) {
+      preferenceFeedbackTimer = window.setTimeout(() => {
+        pageStatus.hidden = true;
+        pageStatus.classList.remove("page-status-success", "page-status-error");
+      }, timeout);
+    }
+  };
+
+  const savePreference = (request, successMessage = "已保存。") => {
+    showPreferenceFeedback("正在保存...", "info", 0);
+    return request
+      .then((response) => {
+        if (response.ok) {
+          showPreferenceFeedback(successMessage, "success");
+        } else {
+          showPreferenceFeedback("保存失败，请稍后重试。", "error");
+        }
+        return response;
+      })
+      .catch((error) => {
+        showPreferenceFeedback("保存失败，请稍后重试。", "error");
+        throw error;
+      });
+  };
+
   const selectedExportFields = () => {
     return Array.from(document.querySelectorAll("[data-export-field]:checked"))
       .map((field) => field.value);
   };
 
   const saveExportFields = () => {
-    fetch("/products/preferences/export-fields", {
+    savePreference(fetch("/products/preferences/export-fields", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({fields: selectedExportFields()}),
-    }).catch(() => {});
+    })).catch(() => {});
   };
 
   const buildExportUrl = () => {
@@ -121,11 +196,11 @@
   };
 
   const saveFilterViews = (views) => {
-    return fetch("/products/preferences/filter-views", {
+    return savePreference(fetch("/products/preferences/filter-views", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({views}),
-    });
+    }));
   };
 
   filterViewSave?.addEventListener("click", () => {
@@ -140,8 +215,10 @@
     ];
     saveFilterViews(views).then((response) => {
       if (response.ok) {
-        window.location.reload();
+        window.setTimeout(() => window.location.reload(), 600);
       }
+    }).catch(() => {
+      // savePreference has already shown the recovery hint.
     });
   });
 
@@ -149,10 +226,16 @@
     button.addEventListener("click", () => {
       const name = button.dataset.filterViewDelete;
       const views = filterViewState.filter((view) => view.name !== name);
-      saveFilterViews(views).then((response) => {
+      savePreference(fetch("/products/preferences/filter-views", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({views}),
+      }), "已删除。").then((response) => {
         if (response.ok) {
-          window.location.reload();
+          window.setTimeout(() => window.location.reload(), 600);
         }
+      }).catch(() => {
+        // savePreference has already shown the recovery hint.
       });
     });
   });
@@ -172,11 +255,11 @@
 
   const saveState = () => {
     localStorage.setItem(storageKey, JSON.stringify(state));
-    fetch("/products/preferences/columns", {
+    savePreference(fetch("/products/preferences/columns", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(state),
-    }).catch(() => {});
+    })).catch(() => {});
   };
 
   const applyColumnVisibility = (key, visible) => {

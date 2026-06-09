@@ -32,6 +32,153 @@ textarea {
   transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+[data-app-content] {
+  transition: opacity 160ms ease;
+}
+
+[data-app-content]:focus {
+  outline: none;
+}
+
+body.is-page-loading [data-app-content] {
+  opacity: 0.72;
+}
+
+.page-status {
+  position: fixed;
+  top: 76px;
+  right: 20px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  padding: 10px 12px;
+  color: #1e40af;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: var(--shadow-panel);
+}
+
+.page-status[hidden] {
+  display: none;
+}
+
+.page-status-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.page-status-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.pending-page {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-height: 180px;
+  padding: 40px 4px;
+  animation: pending-page-enter 160ms ease-out;
+}
+
+.pending-page-title {
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.pending-page-copy {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.pending-page-lines {
+  display: grid;
+  gap: 10px;
+  width: min(520px, 100%);
+  margin-top: 16px;
+}
+
+.pending-page-line {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 48%, #e2e8f0 100%);
+  background-size: 220% 100%;
+  animation: pending-page-line 1100ms ease-in-out infinite;
+}
+
+.pending-page-line:nth-child(2) {
+  width: 82%;
+}
+
+.pending-page-line:nth-child(3) {
+  width: 64%;
+}
+
+[data-app-content].is-content-entering {
+  animation: page-content-enter 170ms ease-out;
+}
+
+@keyframes pending-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pending-page-line {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending-page,
+  .pending-page-line,
+  [data-app-content].is-content-entering {
+    animation: none;
+  }
+}
+
+.is-busy {
+  cursor: wait;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
 .app-shell {
   background: var(--bg-page);
 }
@@ -155,6 +302,10 @@ textarea {
 .btn-secondary:hover {
   border-color: #94a3b8;
   background: #f8fafc;
+}
+
+.btn-secondary[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 .btn-ghost {
@@ -301,6 +452,39 @@ textarea {
 
 .table-row:hover .action-link {
   color: var(--primary);
+}
+
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  text-align: center;
+}
+
+.empty-state-compact {
+  padding: 20px 12px;
+}
+
+.empty-state-title {
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.empty-state-copy {
+  max-width: 520px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .row-actions {
@@ -760,6 +944,17 @@ textarea {
   gap: 8px;
 }
 
+.bulk-action-feedback {
+  align-self: flex-start;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bulk-action-feedback[hidden] {
+  display: none;
+}
+
 @media (min-width: 768px) {
   .list-panel-actions {
     justify-content: flex-end;
@@ -1049,12 +1244,35 @@ textarea {
 .form-alert {
   margin-bottom: 16px;
   border: 1px solid #fecaca;
+  border-left-width: 4px;
   border-radius: 8px;
   background: #fef2f2;
   padding: 12px 14px;
   color: #b91c1c;
   font-size: 14px;
-  font-weight: 700;
+}
+
+.form-alert-title {
+  font-weight: 800;
+}
+
+.form-alert-message {
+  margin-top: 4px;
+  color: #991b1b;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.form-alert-action {
+  margin-left: 8px;
+  color: #1e40af;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.form-alert-action:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
 }
 
 .flash-message {

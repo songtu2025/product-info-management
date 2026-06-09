@@ -51,7 +51,15 @@
             </tr>
           {% else %}
             <tr>
-              <td class="px-4 py-8 text-center text-slate-500" colspan="6">暂无用户</td>
+              <td colspan="6">
+                <div class="empty-state">
+                  <div class="empty-state-title">暂无用户</div>
+                  <div class="empty-state-copy">可以先创建一个后台账号，再分配角色和启用状态。</div>
+                  <div class="empty-state-actions">
+                    <a class="btn-primary" href="/admin-users/new">新增用户</a>
+                  </div>
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>

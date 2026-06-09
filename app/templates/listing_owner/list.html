@@ -157,7 +157,18 @@
             </tr>
           {% else %}
             <tr>
-              <td class="px-4 py-8 text-center text-slate-500" colspan="10">没有匹配的负责人配置</td>
+              <td colspan="10">
+                <div class="empty-state">
+                  <div class="empty-state-title">没有匹配的负责人配置</div>
+                  <div class="empty-state-copy">可以重置筛选条件，或新增一条 Listing 负责人配置。</div>
+                  <div class="empty-state-actions">
+                    <a class="btn-secondary" href="/listing-owners">重置筛选</a>
+                    {% if can_edit %}
+                      <a class="btn-primary" href="/listing-owners/new">新增 Listing 负责人</a>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
@@ -169,24 +180,29 @@
         <a
           class="btn-secondary {% if owners.page <= 1 %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.first_url }}"
+          {% if owners.page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}
         >首页</a>
         <a
           class="btn-secondary {% if owners.page <= 1 %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.prev_url }}"
+          {% if owners.page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}
         >上一页</a>
         {% for item in pagination.page_numbers %}
           <a
             class="btn-secondary {% if item.page == owners.page %}bg-slate-900 text-white{% endif %}"
             href="{{ item.url }}"
+            {% if item.page == owners.page %}aria-current="page"{% endif %}
           >{{ item.page }}</a>
         {% endfor %}
         <a
           class="btn-secondary {% if owners.pages == 0 or owners.page >= owners.pages %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.next_url }}"
+          {% if owners.pages == 0 or owners.page >= owners.pages %}aria-disabled="true" tabindex="-1"{% endif %}
         >下一页</a>
         <a
           class="btn-secondary {% if owners.pages == 0 or owners.page >= owners.pages %}pointer-events-none opacity-50{% endif %}"
           href="{{ pagination.last_url }}"
+          {% if owners.pages == 0 or owners.page >= owners.pages %}aria-disabled="true" tabindex="-1"{% endif %}
         >末页</a>
       </div>
       <form class="flex items-center gap-2" method="get">

@@ -17,7 +17,10 @@
   </div>
 
   {% if error %}
-    <div class="form-alert">{{ error }}</div>
+    <div class="form-alert" role="alert" aria-live="assertive">
+      <div class="form-alert-title">保存失败</div>
+      <div class="form-alert-message">{{ error }}</div>
+    </div>
   {% endif %}
 
   <form class="content-panel" method="post">
