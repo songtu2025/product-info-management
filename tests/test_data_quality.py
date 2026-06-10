@@ -697,6 +697,88 @@ def test_data_quality_page_uses_layered_operational_layout():
     assert ".quality-issue-panel" in app_css
 
 
+def test_data_quality_detail_panels_use_progressive_disclosure(monkeypatch):
+    monkeypatch.setattr(
+        "app.modules.data_quality.routes.get_product_quality_report",
+        lambda: {
+            "total": 2,
+            "issues": [],
+            "field_issues": [
+                {
+                    "key": "missing_asin",
+                    "label": "缺 ASIN",
+                    "field": "asin",
+                    "count": 0,
+                    "rows": [],
+                },
+                {
+                    "key": "missing_listing",
+                    "label": "缺 Listing",
+                    "field": "listing",
+                    "count": 2,
+                    "rows": [
+                        {
+                            "id": 1,
+                            "store_site": "SAYOLA:US",
+                            "msku": "MSKU-001",
+                            "product_name": "Product 1",
+                        }
+                    ],
+                },
+                {
+                    "key": "missing_brand",
+                    "label": "缺品牌",
+                    "field": "brand",
+                    "count": 1,
+                    "rows": [
+                        {
+                            "id": 2,
+                            "store_site": "SAYOLA:US",
+                            "msku": "MSKU-002",
+                            "product_name": "Product 2",
+                        }
+                    ],
+                },
+            ],
+            "relation_issues": [
+                {
+                    "key": "missing_listing_owner_config",
+                    "label": "缺 Listing 负责人配置",
+                    "field": "listing",
+                    "count": 0,
+                    "rows": [],
+                },
+                {
+                    "key": "orphan_listing_owner_config",
+                    "label": "无产品使用的负责人配置",
+                    "field": "listing",
+                    "count": 1,
+                    "rows": [
+                        {
+                            "id": 3,
+                            "store_site": "SAYOLA:US",
+                            "listing": "Listing B",
+                            "owner": "Bob",
+                        }
+                    ],
+                },
+            ],
+        },
+    )
+
+    response = client.get("/data-quality")
+
+    assert response.status_code == 200
+    assert 'class="quality-issue-summary"' in response.text
+    assert 'class="quality-issue-toggle-text"' in response.text
+    assert response.text.count("<details") == 3
+    assert response.text.count("<details open") == 2
+    assert "缺 ASIN 共 0 条" not in response.text
+    assert "缺 Listing 共 2 条" in response.text
+    assert "缺品牌 共 1 条" in response.text
+    assert "无产品使用的负责人配置 共 1 条" in response.text
+
+
 def test_data_quality_page_passes_store_site_filter(monkeypatch):
     captured = {}
 

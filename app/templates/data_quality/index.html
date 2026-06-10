@@ -102,130 +102,142 @@
   <section class="quality-detail-group">
     <h4 class="quality-group-title">字段完整性</h4>
   <div class="quality-sections">
+    {% set field_detail = namespace(opened=false, rendered=false) %}
     {% for issue in field_issues %}
-      <section class="content-panel ops-results-panel quality-issue-panel">
-        <div class="panel-heading quality-section-heading">
-          <div>
-            <h3 class="panel-title">{{ issue.label }}</h3>
-            <p class="panel-subtitle">共 {{ issue.count }} 条，显示前 20 条</p>
-          </div>
-          <span class="status-badge{% if issue.count == 0 %} status-badge-muted{% endif %}">
-            {{ "无问题" if issue.count == 0 else "需要补齐" }}
-          </span>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table ops-list-table quality-detail-table text-sm">
-            <thead>
-              <tr>
-                <th class="table-head">MSKU</th>
-                <th class="table-head">店铺站点</th>
-                <th class="table-head">产品名称</th>
-                <th class="table-head">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in issue.rows %}
-                <tr class="table-row">
-                  <td class="table-cell font-medium text-blue-800">{{ value(row.msku) }}</td>
-                  <td class="table-cell">{{ value(row.store_site) }}</td>
-                  <td class="table-cell quality-product-name" title="{{ row.product_name or '' }}">{{ value(row.product_name) }}</td>
-                  <td class="table-cell">
-                    <a class="action-link" href="/products/{{ row.id }}">查看详情</a>
-                  </td>
-                </tr>
-              {% else %}
+      {% if issue.count > 0 %}
+        {% set field_detail.rendered = true %}
+        {% set is_open = not field_detail.opened %}
+        {% if is_open %}
+          {% set field_detail.opened = true %}
+        {% endif %}
+        <details{% if is_open %} open{% endif %} class="content-panel ops-results-panel quality-issue-panel">
+          <summary class="quality-issue-summary">
+            <div>
+              <h3 class="panel-title">{{ issue.label }}</h3>
+              <p class="panel-subtitle">{{ issue.label }} 共 {{ issue.count }} 条，显示前 20 条</p>
+            </div>
+            <div class="quality-issue-summary-meta">
+              <span class="status-badge">需要补齐</span>
+              <span class="quality-issue-toggle-text">展开 / 收起</span>
+            </div>
+          </summary>
+          <div class="quality-issue-body table-wrap">
+            <table class="data-table ops-list-table quality-detail-table text-sm">
+              <thead>
                 <tr>
-                  <td colspan="4">
-                    <div class="empty-state empty-state-compact">
-                      <div class="empty-state-title">当前无异常</div>
-                      <div class="empty-state-copy">该项暂未发现需要补齐的产品字段。</div>
-                    </div>
-                  </td>
+                  <th class="table-head">MSKU</th>
+                  <th class="table-head">店铺站点</th>
+                  <th class="table-head">产品名称</th>
+                  <th class="table-head">操作</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {% for row in issue.rows %}
+                  <tr class="table-row">
+                    <td class="table-cell font-medium text-blue-800">{{ value(row.msku) }}</td>
+                    <td class="table-cell">{{ value(row.store_site) }}</td>
+                    <td class="table-cell quality-product-name" title="{{ row.product_name or '' }}">{{ value(row.product_name) }}</td>
+                    <td class="table-cell">
+                      <a class="action-link" href="/products/{{ row.id }}">查看详情</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      {% endif %}
     {% endfor %}
+    {% if not field_detail.rendered %}
+      <div class="empty-state empty-state-compact quality-empty">
+        <div class="empty-state-title">当前无异常</div>
+        <div class="empty-state-copy">字段完整性已通过，没有需要补齐的产品字段。</div>
+      </div>
+    {% endif %}
   </div>
   </section>
 
   <section class="quality-detail-group">
     <h4 class="quality-group-title">业务关系健康</h4>
     <div class="quality-sections">
+    {% set relation_detail = namespace(opened=false, rendered=false) %}
     {% for issue in relation_issues %}
-      <section class="content-panel ops-results-panel quality-issue-panel">
-        <div class="panel-heading quality-section-heading">
-          <div>
-            <h3 class="panel-title">{{ issue.label }}</h3>
-            <p class="panel-subtitle">共 {{ issue.count }} 条，显示前 20 条</p>
-          </div>
-          <span class="status-badge{% if issue.count == 0 %} status-badge-muted{% endif %}">
-            {{ "无问题" if issue.count == 0 else "需要核对" }}
-          </span>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table ops-list-table quality-detail-table text-sm">
-            <thead>
-              <tr>
-                <th class="table-head">店铺站点</th>
-                <th class="table-head">Listing</th>
-                <th class="table-head">MSKU / 负责人</th>
-                <th class="table-head">产品名称</th>
-                <th class="table-head">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in issue.rows %}
-                <tr class="table-row">
-                  <td class="table-cell">{{ value(row.store_site) }}</td>
-                  <td class="table-cell font-medium text-blue-800">{{ value(row.listing) }}</td>
-                  <td class="table-cell">{{ value(row.msku if row.msku else row.owner) }}</td>
-                  <td class="table-cell quality-product-name" title="{{ row.product_name or '' }}">{{ value(row.product_name) }}</td>
-                  <td class="table-cell">
-                    <div class="row-actions">
-                      {% if issue.key == "missing_listing_owner_config" %}
-                        <a class="action-link" href="/products/{{ row.id }}">查看产品</a>
-                        {% if can_edit and row.store_site and row.listing %}
-                          <a class="action-link" href="/listing-owners/new?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">创建负责人配置</a>
-                        {% endif %}
-                      {% elif issue.key in ["unknown_product_store_site", "unknown_listing_owner_store_site"] %}
-                        {% if issue.key == "unknown_product_store_site" %}
-                          <a class="action-link" href="/products/{{ row.id }}">查看产品</a>
-                        {% elif row.listing %}
-                          <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>
-                        {% else %}
-                          <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">查看负责人配置</a>
-                        {% endif %}
-                        {% if can_edit and row.store_site %}
-                          <a class="action-link" href="/store-sites/new?store_site={{ row.store_site|urlencode }}">创建店铺站点</a>
-                        {% endif %}
-                      {% else %}
-                        {% if row.listing %}
-                          <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>
-                        {% else %}
-                          <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">查看负责人配置</a>
-                        {% endif %}
-                      {% endif %}
-                    </div>
-                  </td>
-                </tr>
-              {% else %}
+      {% if issue.count > 0 %}
+        {% set relation_detail.rendered = true %}
+        {% set is_open = not relation_detail.opened %}
+        {% if is_open %}
+          {% set relation_detail.opened = true %}
+        {% endif %}
+        <details{% if is_open %} open{% endif %} class="content-panel ops-results-panel quality-issue-panel">
+          <summary class="quality-issue-summary">
+            <div>
+              <h3 class="panel-title">{{ issue.label }}</h3>
+              <p class="panel-subtitle">{{ issue.label }} 共 {{ issue.count }} 条，显示前 20 条</p>
+            </div>
+            <div class="quality-issue-summary-meta">
+              <span class="status-badge">需要核对</span>
+              <span class="quality-issue-toggle-text">展开 / 收起</span>
+            </div>
+          </summary>
+          <div class="quality-issue-body table-wrap">
+            <table class="data-table ops-list-table quality-detail-table text-sm">
+              <thead>
                 <tr>
-                  <td colspan="5">
-                    <div class="empty-state empty-state-compact">
-                      <div class="empty-state-title">当前无异常</div>
-                      <div class="empty-state-copy">该项暂未发现需要核对的业务关系。</div>
-                    </div>
-                  </td>
+                  <th class="table-head">店铺站点</th>
+                  <th class="table-head">Listing</th>
+                  <th class="table-head">MSKU / 负责人</th>
+                  <th class="table-head">产品名称</th>
+                  <th class="table-head">操作</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {% for row in issue.rows %}
+                  <tr class="table-row">
+                    <td class="table-cell">{{ value(row.store_site) }}</td>
+                    <td class="table-cell font-medium text-blue-800">{{ value(row.listing) }}</td>
+                    <td class="table-cell">{{ value(row.msku if row.msku else row.owner) }}</td>
+                    <td class="table-cell quality-product-name" title="{{ row.product_name or '' }}">{{ value(row.product_name) }}</td>
+                    <td class="table-cell">
+                      <div class="row-actions">
+                        {% if issue.key == "missing_listing_owner_config" %}
+                          <a class="action-link" href="/products/{{ row.id }}">查看产品</a>
+                          {% if can_edit and row.store_site and row.listing %}
+                            <a class="action-link" href="/listing-owners/new?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">创建负责人配置</a>
+                          {% endif %}
+                        {% elif issue.key in ["unknown_product_store_site", "unknown_listing_owner_store_site"] %}
+                          {% if issue.key == "unknown_product_store_site" %}
+                            <a class="action-link" href="/products/{{ row.id }}">查看产品</a>
+                          {% elif row.listing %}
+                            <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>
+                          {% else %}
+                            <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">查看负责人配置</a>
+                          {% endif %}
+                          {% if can_edit and row.store_site %}
+                            <a class="action-link" href="/store-sites/new?store_site={{ row.store_site|urlencode }}">创建店铺站点</a>
+                          {% endif %}
+                        {% else %}
+                          {% if row.listing %}
+                            <a class="action-link" href="/listing-owners?q={{ row.listing|urlencode }}">查看负责人配置</a>
+                          {% else %}
+                            <a class="action-link" href="/listing-owners?q={{ row.store_site|urlencode }}">查看负责人配置</a>
+                          {% endif %}
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      {% endif %}
     {% endfor %}
+    {% if not relation_detail.rendered %}
+      <div class="empty-state empty-state-compact quality-empty">
+        <div class="empty-state-title">当前无异常</div>
+        <div class="empty-state-copy">业务关系已通过，没有需要核对的负责人或店铺站点关系。</div>
+      </div>
+    {% endif %}
     </div>
   </section>
   </div>

@@ -1217,6 +1217,44 @@ body.is-page-loading [data-app-content] {
   border-color: #d7e1ee;
 }
 
+.quality-issue-summary {
+  display: flex;
+  cursor: pointer;
+  list-style: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.quality-issue-summary::-webkit-details-marker {
+  display: none;
+}
+
+.quality-issue-summary:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.24);
+  outline-offset: -3px;
+}
+
+.quality-issue-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.quality-issue-toggle-text {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quality-issue-body {
+  border-top: 1px solid var(--border-subtle);
+}
+
 .quality-section-heading {
   align-items: flex-start;
 }
