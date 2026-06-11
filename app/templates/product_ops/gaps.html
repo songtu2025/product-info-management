@@ -1,0 +1,109 @@
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
+
+{% block content %}
+  <div class="ops-workbench product-ops-workbench">
+    {% include "product_ops/_tabs.html" %}
+
+    <div class="product-ops-page-actions">
+      <div>
+        <h2 class="panel-title">经营问题工作台</h2>
+        <p class="panel-subtitle">集中查看产品信息、销占比和销售预估的待处理问题。</p>
+      </div>
+      <a class="btn-secondary" href="/product-ops/gaps/export" download>导出问题清单</a>
+    </div>
+
+    <div class="product-ops-gap-summary">
+      <a class="product-ops-gap-card" href="/product-ops?data_status=missing_product">
+        <span class="product-ops-gap-label">缺产品信息</span>
+        <strong>{{ summary.missing_product }}</strong>
+      </a>
+      <a class="product-ops-gap-card" href="/product-ops?data_status=missing_allocation">
+        <span class="product-ops-gap-label">缺销占比</span>
+        <strong>{{ summary.missing_allocation }}</strong>
+      </a>
+      <a class="product-ops-gap-card" href="/product-ops?data_status=missing_forecast">
+        <span class="product-ops-gap-label">缺销售预估</span>
+        <strong>{{ summary.missing_forecast }}</strong>
+      </a>
+      <a class="product-ops-gap-card" href="/product-ops/allocations?ratio_status=zero">
+        <span class="product-ops-gap-label">销占比为0</span>
+        <strong>{{ summary.zero_allocation_ratio }}</strong>
+      </a>
+      <a class="product-ops-gap-card" href="/product-ops/forecasts?forecast_status=zero">
+        <span class="product-ops-gap-label">销售预估为0</span>
+        <strong>{{ summary.zero_forecast_units }}</strong>
+      </a>
+    </div>
+
+    {% for group in groups %}
+      <div class="content-panel ops-results-panel product-ops-results-panel">
+        <div class="panel-heading ops-results-heading">
+          <div>
+            <h2 class="panel-title">{{ group.label }}</h2>
+            <p class="panel-subtitle">优先展示前 {{ group.rows|length }} 条，用于快速定位要处理的 Listing。</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table ops-list-table product-ops-table product-ops-gap-table text-sm">
+            <thead class="text-left">
+              <tr>
+                <th class="table-head">店铺站点</th>
+                <th class="table-head">Listing</th>
+                <th class="table-head">负责人</th>
+                <th class="table-head">产品信息数</th>
+                <th class="table-head">销占比SKU数</th>
+                <th class="table-head">销售预估月份</th>
+                <th class="table-head">状态</th>
+                <th class="table-head product-ops-actions-head">处理入口</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in group.rows %}
+                <tr class="table-row">
+                  <td class="table-cell font-medium text-slate-950">{{ row.store_site or "-" }}</td>
+                  <td class="table-cell">{{ row.listing or "-" }}</td>
+                  <td class="table-cell">{{ row.owner or "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.product_msku_count if row.product_msku_count is not none else "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.allocation_msku_count if row.allocation_msku_count is not none else "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.forecast_month_count if row.forecast_month_count is not none else "-" }}</td>
+                  <td class="table-cell"><span class="status-badge status-badge-muted">{{ row.data_status }}</span></td>
+                  <td class="table-cell product-ops-row-actions">
+                    <a class="action-link" href="/product-ops?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">总览</a>
+                    <a class="action-link" href="/product-ops/listing-profile?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">经营档案</a>
+                    <a class="action-link" href="/?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">产品信息</a>
+                    <a class="action-link" href="/product-ops/allocations?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">销占比</a>
+                    <a class="action-link" href="/product-ops/forecasts?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">销售预估</a>
+                    {% if group.key == "zero_allocation_ratio" %}
+                      <a class="action-link" href="/product-ops/allocations?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}&amp;ratio_status=zero">定位为0销占比</a>
+                    {% endif %}
+                    {% if group.key == "zero_forecast_units" %}
+                      <a class="action-link" href="/product-ops/forecasts?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}&amp;forecast_status=zero">定位为0预估</a>
+                    {% endif %}
+                    {% if group.key in ["missing_allocation", "zero_allocation_ratio"] %}
+                      <a class="action-link" href="/product-ops/allocations/import-template?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}" download>销占比模板</a>
+                      <a class="action-link" href="/product-ops/allocations/import">销占比维护</a>
+                    {% endif %}
+                    {% if group.key in ["missing_forecast", "zero_forecast_units"] %}
+                      <a class="action-link" href="/product-ops/forecasts/import-template?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}" download>预估模板</a>
+                      <a class="action-link" href="/product-ops/forecasts/import">预估维护</a>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="8">
+                    <div class="empty-state">
+                      <div class="empty-state-title">当前无异常</div>
+                      <div class="empty-state-copy">这一类暂时没有需要优先处理的 Listing。</div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

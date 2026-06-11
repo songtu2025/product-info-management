@@ -1,0 +1,152 @@
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
+
+{% block content %}
+  <div class="ops-workbench product-ops-workbench">
+    {% include "product_ops/_tabs.html" %}
+
+    <form class="filter-panel ops-filter-panel product-ops-filter-panel" method="get">
+      <div class="product-ops-filter-heading mb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-950">筛选经营数据</h2>
+          <p class="mt-1 text-sm text-slate-500">按产品、Listing、品牌和数据状态批量查看经营数据。</p>
+        </div>
+        <div class="product-ops-filter-actions">
+          <button class="btn-primary" type="submit">查询</button>
+          <a class="btn-secondary" href="/product-ops">重置</a>
+          <a class="btn-secondary" href="{{ export_url }}" download>导出当前筛选</a>
+          <a class="btn-secondary" href="/product-ops/import-preview">批量导入</a>
+        </div>
+      </div>
+
+      <div class="product-ops-filter-grid grid gap-3">
+        <label class="field md:col-span-2">
+          <span class="field-label">关键词</span>
+          <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="店铺站点 / Listing / MSKU / SKU / 品牌">
+        </label>
+        <label class="field">
+          <span class="field-label">店铺站点</span>
+          <input class="field-input" name="store_site" value="{{ filters.store_site or '' }}" placeholder="RIVBOS:US">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing</span>
+          <input class="field-input" name="listing" value="{{ filters.listing or '' }}" placeholder="RBK004">
+        </label>
+        <label class="field">
+          <span class="field-label">品牌</span>
+          <input class="field-input" name="brand" value="{{ filters.brand or '' }}" placeholder="RIVBOS">
+        </label>
+        <label class="field">
+          <span class="field-label">数据状态</span>
+          <select class="field-input" name="data_status">
+            <option value="">全部</option>
+            <option value="complete" {% if filters.data_status == "complete" %}selected{% endif %}>正常</option>
+            <option value="missing_allocation" {% if filters.data_status == "missing_allocation" %}selected{% endif %}>缺销占比</option>
+            <option value="missing_forecast" {% if filters.data_status == "missing_forecast" %}selected{% endif %}>缺销售预估</option>
+            <option value="missing_product" {% if filters.data_status == "missing_product" %}selected{% endif %}>缺产品信息</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">每页行数</span>
+          <select class="field-input" name="page_size">
+            {% for size in page_sizes %}
+              <option value="{{ size }}" {% if product_ops.page_size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </form>
+
+    <div class="content-panel ops-results-panel product-ops-results-panel">
+      <div class="panel-heading ops-results-heading">
+        <div>
+          <h2 class="panel-title">经营总览</h2>
+          <p class="panel-subtitle">共 {{ product_ops.total }} 条，每页 {{ product_ops.page_size }} 行，当前第 {{ product_ops.page }} 页。</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table ops-list-table product-ops-table product-ops-overview-table text-sm">
+          <thead class="text-left">
+            <tr>
+              <th class="table-head">店铺站点</th>
+              <th class="table-head">Listing</th>
+              <th class="table-head">负责人</th>
+              <th class="table-head">Listing状态</th>
+              <th class="table-head">项目组</th>
+              <th class="table-head">品牌</th>
+              <th class="table-head">品类</th>
+              <th class="table-head">产品信息数</th>
+              <th class="table-head">销占比SKU数</th>
+              <th class="table-head">未来预估</th>
+              <th class="table-head">采购准备度</th>
+              <th class="table-head">数据状态</th>
+              <th class="table-head product-ops-actions-head">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr class="table-row">
+                <td class="table-cell font-medium text-slate-950">{{ row.store_site or "-" }}</td>
+                <td class="table-cell">{{ row.listing or "-" }}</td>
+                <td class="table-cell">{{ row.owner or "-" }}</td>
+                <td class="table-cell">{{ row.listing_status or "-" }}</td>
+                <td class="table-cell">{{ row.project_group or "-" }}</td>
+                <td class="table-cell">{{ row.product_brands or "-" }}</td>
+                <td class="table-cell">{{ row.product_categories or "-" }}</td>
+                <td class="table-cell">
+                  {% if row.product_msku_count %}
+                    <a class="action-link" href="/?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">{{ row.product_msku_count }} 个</a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="table-cell">
+                  {% if row.allocation_msku_count %}
+                    <a class="action-link" href="/product-ops/allocations?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">{{ row.allocation_msku_count }} 个</a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="table-cell">
+                  {% if row.forecast_month_count %}
+                    <a class="action-link" href="/product-ops/forecasts?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">{{ row.forecast_month_count }} 个月 / {{ row.forecast_units_total }}</a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="table-cell">
+                  <span class="status-badge {% if row.purchase_readiness_status != 'ready' %}status-badge-muted{% endif %}">{{ row.purchase_readiness_label or "-" }}</span>
+                  {% if row.purchase_readiness_reasons %}
+                    <div class="mt-1 text-xs text-slate-500">{{ row.purchase_readiness_reasons }}</div>
+                  {% endif %}
+                </td>
+                <td class="table-cell">
+                  <span class="status-badge {% if row.data_status != '正常' %}status-badge-muted{% endif %}">{{ row.data_status }}</span>
+                </td>
+                <td class="table-cell product-ops-row-actions">
+                  <a class="action-link" href="/product-ops/listing-profile?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">经营档案</a>
+                  <a class="action-link" href="/?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">产品信息</a>
+                  <a class="action-link" href="/product-ops/allocations?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">销占比</a>
+                  <a class="action-link" href="/product-ops/forecasts?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">销售预估</a>
+                </td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="13">
+                  <div class="empty-state">
+                    <div class="empty-state-title">暂无经营数据</div>
+                    <div class="empty-state-copy">先维护 Listing 负责人配置，后续再接入销占比和销售预估数据。</div>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% with page_data=product_ops %}
+        {% include "product_ops/_pagination.html" %}
+      {% endwith %}
+    </div>
+  </div>
+{% endblock %}

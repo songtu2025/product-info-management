@@ -1,0 +1,149 @@
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
+
+{% block content %}
+  <div class="ops-workbench product-ops-workbench">
+    {% include "product_ops/_tabs.html" %}
+
+    <form class="filter-panel ops-filter-panel product-ops-filter-panel" method="get">
+      <div class="product-ops-filter-heading mb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-950">筛选销占比</h2>
+          <p class="mt-1 text-sm text-slate-500">按店铺站点、Listing、MSKU、SKU、负责人或款式搜索。</p>
+        </div>
+        <div class="product-ops-filter-actions">
+          <button class="btn-primary" type="submit">查询</button>
+          <a class="btn-secondary" href="/product-ops/allocations">重置</a>
+          <a class="btn-secondary" href="{{ zero_ratio_url }}">销占比为0</a>
+          <a class="btn-secondary" href="{{ missing_allocation_url }}">缺失销占比</a>
+          <a class="btn-secondary" href="{{ export_url }}" download>导出当前筛选</a>
+          <a class="btn-secondary" href="{{ import_template_url }}" download>导出维护模板</a>
+          <a class="btn-primary" href="/product-ops/allocations/import">导入维护</a>
+          <a class="btn-secondary" href="/product-ops/import-preview">批量导入</a>
+        </div>
+      </div>
+
+      <div class="product-ops-filter-grid grid gap-3">
+        <label class="field md:col-span-2">
+          <span class="field-label">关键词</span>
+          <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="店铺站点 / Listing / MSKU / SKU / 负责人 / 款式">
+        </label>
+        <label class="field">
+          <span class="field-label">店铺站点</span>
+          <input class="field-input" name="store_site" value="{{ filters.store_site or '' }}" placeholder="RIVBOS:US">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing</span>
+          <input class="field-input" name="listing" value="{{ filters.listing or '' }}" placeholder="RBK004">
+        </label>
+        <label class="field">
+          <span class="field-label">每页行数</span>
+          <select class="field-input" name="page_size">
+            {% for size in page_sizes %}
+              <option value="{{ size }}" {% if allocations.page_size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </form>
+
+    <div class="content-panel ops-results-panel product-ops-results-panel">
+      <div class="panel-heading ops-results-heading">
+        <div>
+          <h2 class="panel-title">销占比管理</h2>
+          <p class="panel-subtitle">共 {{ allocations.total }} 条，每页 {{ allocations.page_size }} 行，当前第 {{ allocations.page }} 页。</p>
+        </div>
+      </div>
+
+      <form method="post" action="/product-ops/allocations/bulk-update">
+        <input type="hidden" name="q" value="{{ filters.q or '' }}">
+        <input type="hidden" name="store_site" value="{{ filters.store_site or '' }}">
+        <input type="hidden" name="listing" value="{{ filters.listing or '' }}">
+        <input type="hidden" name="ratio_status" value="{{ filters.ratio_status or '' }}">
+        <input type="hidden" name="page_size" value="{{ allocations.page_size }}">
+
+        <div class="border-b border-slate-200 px-4 py-3">
+          <div class="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
+            <label class="field">
+              <span class="field-label">款式销占比</span>
+              <input class="field-input" name="style_sales_ratio" placeholder="35% 或小数">
+            </label>
+            <label class="field">
+              <span class="field-label">SKU销占比</span>
+              <input class="field-input" name="sku_sales_ratio" placeholder="20% 或小数">
+            </label>
+            <label class="field">
+              <span class="field-label">备货定位</span>
+              <input class="field-input" name="stocking_position" placeholder="备货 / 少备">
+            </label>
+            <div class="flex items-end">
+              <button class="btn-primary w-full" type="submit">批量保存</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table ops-list-table product-ops-table product-ops-allocation-table text-sm">
+            <thead class="text-left">
+              <tr>
+                <th class="table-head">选择</th>
+                <th class="table-head">店铺站点</th>
+                <th class="table-head">站点</th>
+                <th class="table-head">Listing</th>
+                <th class="table-head">MSKU</th>
+                <th class="table-head">SKU</th>
+                <th class="table-head">负责人</th>
+                <th class="table-head">款式</th>
+                <th class="table-head">款式销占比</th>
+                <th class="table-head">SKU销占比</th>
+                <th class="table-head">备货定位</th>
+                <th class="table-head">总发货天数</th>
+                <th class="table-head">更新时间</th>
+                <th class="table-head product-ops-actions-head">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr class="table-row">
+                  <td class="table-cell">
+                    <input type="checkbox" name="row_ids" value="{{ row.id }}" aria-label="选择 {{ row.msku or row.id }}">
+                  </td>
+                  <td class="table-cell font-medium text-slate-950">{{ row.store_site or "-" }}</td>
+                  <td class="table-cell">{{ row.site or "-" }}</td>
+                  <td class="table-cell">{{ row.listing or "-" }}</td>
+                  <td class="table-cell mono">{{ row.msku or "-" }}</td>
+                  <td class="table-cell mono">{{ row.sku or "-" }}</td>
+                  <td class="table-cell">{{ row.owner or "-" }}</td>
+                  <td class="table-cell">{{ row.style or "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.style_sales_ratio|percent }}</td>
+                  <td class="table-cell numeric-cell">{{ row.sku_sales_ratio|percent }}</td>
+                  <td class="table-cell">{{ row.stocking_position or "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.total_shipping_days if row.total_shipping_days is not none else "-" }}</td>
+                  <td class="table-cell">{{ row.updated_at or "-" }}</td>
+                  <td class="table-cell product-ops-row-actions">
+                    <a class="action-link" href="/product-ops?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">总览</a>
+                    <a class="action-link" href="/product-ops/listing-profile?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">经营档案</a>
+                    <a class="action-link" href="/?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">产品信息</a>
+                    <a class="action-link" href="/product-ops/forecasts?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">销售预估</a>
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="14">
+                    <div class="empty-state">
+                      <div class="empty-state-title">暂无销占比数据</div>
+                      <div class="empty-state-copy">后续可从销占比参数表导入当前有效配置。</div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+
+      {% with page_data=allocations %}
+        {% include "product_ops/_pagination.html" %}
+      {% endwith %}
+    </div>
+  </div>
+{% endblock %}

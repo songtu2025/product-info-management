@@ -74,6 +74,14 @@ def test_partial_navigation_guards_downloads_and_stale_responses():
     assert "requestId !== latestRequestId" in partial_nav_js
 
 
+def test_partial_navigation_ignores_placeholder_nav_links_for_active_state():
+    partial_nav_js = Path("app/static/js/partial-nav.js").read_text(encoding="utf-8")
+
+    assert "isPlaceholderLink" in partial_nav_js
+    assert 'link.getAttribute("href") === "#"' in partial_nav_js
+    assert "!isPlaceholderLink(link)" in partial_nav_js
+
+
 def test_frontend_feedback_shows_busy_state_for_navigation_and_forms():
     layout_html = Path("app/templates/layout.html").read_text(encoding="utf-8")
     app_css = Path("app/static/css/app.css").read_text(encoding="utf-8")

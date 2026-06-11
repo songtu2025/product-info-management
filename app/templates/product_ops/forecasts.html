@@ -1,0 +1,165 @@
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
+
+{% block content %}
+  <div class="ops-workbench product-ops-workbench">
+    {% include "product_ops/_tabs.html" %}
+
+    <form class="filter-panel ops-filter-panel product-ops-filter-panel" method="get">
+      <div class="product-ops-filter-heading mb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-950">筛选销售预估</h2>
+          <p class="mt-1 text-sm text-slate-500">按店铺站点、Listing 和月份查看 Listing 月度预估销量。</p>
+        </div>
+        <div class="product-ops-filter-actions">
+          <button class="btn-primary" type="submit">查询</button>
+          <a class="btn-secondary" href="/product-ops/forecasts">重置</a>
+          <a class="btn-secondary" href="{{ zero_forecast_url }}">预估为0</a>
+          <a class="btn-secondary" href="{{ missing_forecast_url }}">缺失销售预估</a>
+          <a class="btn-secondary" href="{{ export_url }}" download>导出当前筛选</a>
+          <a class="btn-secondary" href="{{ import_template_url }}" download>导出维护模板</a>
+          <a class="btn-secondary" href="/product-ops/forecasts/import">导入维护</a>
+          <a class="btn-secondary" href="/product-ops/import-preview">批量导入</a>
+        </div>
+      </div>
+
+      <div class="product-ops-filter-grid grid gap-3">
+        <label class="field md:col-span-2">
+          <span class="field-label">关键词</span>
+          <input class="field-input" name="q" type="search" value="{{ filters.q or '' }}" placeholder="店铺站点 / 站点 / Listing">
+        </label>
+        <label class="field">
+          <span class="field-label">店铺站点</span>
+          <input class="field-input" name="store_site" value="{{ filters.store_site or '' }}" placeholder="RIVBOS:US">
+        </label>
+        <label class="field">
+          <span class="field-label">站点</span>
+          <input class="field-input" name="site" value="{{ filters.site or '' }}" placeholder="US">
+        </label>
+        <label class="field">
+          <span class="field-label">Listing</span>
+          <input class="field-input" name="listing" value="{{ filters.listing or '' }}" placeholder="RBK004">
+        </label>
+        <label class="field">
+          <span class="field-label">每页行数</span>
+          <select class="field-input" name="page_size">
+            {% for size in page_sizes %}
+              <option value="{{ size }}" {% if forecasts.page_size == size %}selected{% endif %}>{{ size }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </form>
+
+    <div class="content-panel ops-results-panel product-ops-results-panel">
+      <div class="panel-heading ops-results-heading">
+        <div>
+          <h2 class="panel-title">销售预估管理</h2>
+          <p class="panel-subtitle">共 {{ forecasts.total }} 条，每页 {{ forecasts.page_size }} 行，当前第 {{ forecasts.page }} 页。</p>
+        </div>
+      </div>
+
+      <form class="border-b border-slate-200 px-4 py-3" method="post" action="/product-ops/forecasts/upsert">
+        <input type="hidden" name="q" value="{{ filters.q or '' }}">
+        <input type="hidden" name="forecast_status" value="{{ filters.forecast_status or '' }}">
+        <input type="hidden" name="page_size" value="{{ forecasts.page_size }}">
+        <div class="grid gap-3 lg:grid-cols-[1fr_0.7fr_1fr_0.8fr_0.8fr_auto]">
+          <label class="field">
+            <span class="field-label">店铺站点</span>
+            <input class="field-input" name="store_site" value="{{ filters.store_site or '' }}" placeholder="RIVBOS:US">
+          </label>
+          <label class="field">
+            <span class="field-label">站点</span>
+            <input class="field-input" name="site" value="{{ filters.site or '' }}" placeholder="US">
+          </label>
+          <label class="field">
+            <span class="field-label">Listing</span>
+            <input class="field-input" name="listing" value="{{ filters.listing or '' }}" placeholder="RBK004">
+          </label>
+          <label class="field">
+            <span class="field-label">月份</span>
+            <input class="field-input" name="forecast_month" placeholder="2026-09">
+          </label>
+          <label class="field">
+            <span class="field-label">月度预估销量</span>
+            <input class="field-input" name="forecast_units" placeholder="1200">
+          </label>
+          <div class="flex items-end">
+            <button class="btn-primary w-full" type="submit">新增月份</button>
+          </div>
+        </div>
+      </form>
+
+      <form method="post" action="/product-ops/forecasts/bulk-update">
+        <input type="hidden" name="q" value="{{ filters.q or '' }}">
+        <input type="hidden" name="store_site" value="{{ filters.store_site or '' }}">
+        <input type="hidden" name="site" value="{{ filters.site or '' }}">
+        <input type="hidden" name="listing" value="{{ filters.listing or '' }}">
+        <input type="hidden" name="forecast_status" value="{{ filters.forecast_status or '' }}">
+        <input type="hidden" name="page_size" value="{{ forecasts.page_size }}">
+
+        <div class="border-b border-slate-200 px-4 py-3">
+          <div class="grid gap-3 md:grid-cols-[1fr_auto]">
+            <label class="field">
+              <span class="field-label">批量月度预估销量</span>
+              <input class="field-input" name="forecast_units" placeholder="1200">
+            </label>
+            <div class="flex items-end">
+              <button class="btn-primary w-full" type="submit">批量保存</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table ops-list-table product-ops-table product-ops-forecast-table text-sm">
+            <thead class="text-left">
+              <tr>
+                <th class="table-head">选择</th>
+                <th class="table-head">店铺站点</th>
+                <th class="table-head">站点</th>
+                <th class="table-head">Listing</th>
+                <th class="table-head">月份</th>
+                <th class="table-head">Listing 月度预估销量</th>
+                <th class="table-head">更新时间</th>
+                <th class="table-head product-ops-actions-head">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr class="table-row">
+                  <td class="table-cell">
+                    <input type="checkbox" name="row_ids" value="{{ row.id }}" aria-label="选择 {{ row.listing or row.id }} {{ row.forecast_month or '' }}">
+                  </td>
+                  <td class="table-cell font-medium text-slate-950">{{ row.store_site or "-" }}</td>
+                  <td class="table-cell">{{ row.site or "-" }}</td>
+                  <td class="table-cell">{{ row.listing or "-" }}</td>
+                  <td class="table-cell">{{ row.forecast_month or "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.forecast_units if row.forecast_units is not none else "-" }}</td>
+                  <td class="table-cell">{{ row.updated_at or "-" }}</td>
+                  <td class="table-cell product-ops-row-actions">
+                    <a class="action-link" href="/product-ops?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">总览</a>
+                    <a class="action-link" href="/product-ops/listing-profile?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">经营档案</a>
+                    <a class="action-link" href="/product-ops/allocations?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">销占比</a>
+                    <a class="action-link" href="/?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">产品信息</a>
+                  </td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="8">
+                    <div class="empty-state">
+                      <div class="empty-state-title">暂无销售预估数据</div>
+                      <div class="empty-state-copy">后续可从销售预估参数表导入 Listing 月度预估销量。</div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+
+      {% with page_data=forecasts %}
+        {% include "product_ops/_pagination.html" %}
+      {% endwith %}
+    </div>
+  </div>
+{% endblock %}

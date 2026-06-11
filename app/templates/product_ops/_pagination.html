@@ -1,0 +1,12 @@
+<div class="pagination-bar">
+  <div class="pagination-actions">
+    <a class="btn-secondary {% if page_data.page <= 1 %}pointer-events-none opacity-50{% endif %}" href="{{ pagination.first_url }}">首页</a>
+    <a class="btn-secondary {% if page_data.page <= 1 %}pointer-events-none opacity-50{% endif %}" href="{{ pagination.prev_url }}">上一页</a>
+    {% for item in pagination.page_numbers %}
+      <a class="btn-secondary {% if item.page == page_data.page %}bg-slate-900 text-white{% endif %}" href="{{ item.url }}">{{ item.page }}</a>
+    {% endfor %}
+    <a class="btn-secondary {% if page_data.pages == 0 or page_data.page >= page_data.pages %}pointer-events-none opacity-50{% endif %}" href="{{ pagination.next_url }}">下一页</a>
+    <a class="btn-secondary {% if page_data.pages == 0 or page_data.page >= page_data.pages %}pointer-events-none opacity-50{% endif %}" href="{{ pagination.last_url }}">末页</a>
+  </div>
+  <span class="text-sm text-slate-500">第 {{ page_data.page }} / {{ page_data.pages if page_data.pages else 1 }} 页</span>
+</div>

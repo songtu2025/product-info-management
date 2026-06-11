@@ -4,3 +4,8 @@ uvicorn-*.log
 uvicorn-*.pid
 __pycache__/
 .pytest_cache/
+data/imports/
+data/product_ops/
+logs/
+logs/*.pid
+待合并/

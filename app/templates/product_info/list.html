@@ -421,6 +421,9 @@
                 {% endfor %}
                 <td class="table-cell" data-column="actions">
                   <div class="row-actions">
+                    {% if row.store_site and row.listing %}
+                      <a class="action-link" href="/product-ops/listing-profile?store_site={{ row.store_site|urlencode }}&amp;listing={{ row.listing|urlencode }}">经营档案</a>
+                    {% endif %}
                     <a class="action-link" href="/products/{{ row.id }}">详情</a>
                     <a class="action-link" href="/operation-logs?table_name=amazon_product_info&amp;record_id={{ row.id }}">日志</a>
                     {% if can_edit %}

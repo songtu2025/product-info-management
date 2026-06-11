@@ -1,0 +1,178 @@
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
+
+{% block content %}
+  <div class="ops-workbench product-ops-workbench">
+    {% include "product_ops/_tabs.html" %}
+
+    <div class="content-panel ops-results-panel product-ops-results-panel">
+      <div class="panel-heading ops-results-heading">
+        <div>
+          <h2 class="panel-title">Listing 经营档案</h2>
+          <p class="panel-subtitle">{{ profile.store_site }} / {{ profile.listing }}</p>
+        </div>
+        <div class="product-ops-filter-actions">
+          <a class="btn-secondary" href="/product-ops?store_site={{ profile.store_site|urlencode }}&amp;listing={{ profile.listing|urlencode }}">返回总览</a>
+          <a class="btn-secondary" href="/?store_site={{ profile.store_site|urlencode }}&amp;listing={{ profile.listing|urlencode }}">产品信息</a>
+          <a class="btn-secondary" href="/product-ops/allocations?store_site={{ profile.store_site|urlencode }}&amp;listing={{ profile.listing|urlencode }}">销占比</a>
+          <a class="btn-secondary" href="/product-ops/forecasts?store_site={{ profile.store_site|urlencode }}&amp;listing={{ profile.listing|urlencode }}">销售预估</a>
+        </div>
+      </div>
+
+      <div class="border-b border-slate-200 px-4 py-4">
+        <div class="mb-4 rounded-md border border-slate-200 bg-white px-4 py-3">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900">采购准备度</h3>
+              <p class="mt-1 text-xs text-slate-500">{{ purchase_readiness.message }}</p>
+            </div>
+            <span class="status-badge {% if purchase_readiness.status != 'ready' %}status-badge-muted{% endif %}">{{ purchase_readiness.label }}</span>
+          </div>
+          {% if purchase_readiness.reasons %}
+            <div class="mt-3 flex flex-wrap gap-2">
+              {% for reason in purchase_readiness.reasons %}
+                <span class="status-badge status-badge-muted">{{ reason }}</span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900">经营健康度</h3>
+            <p class="mt-1 text-xs text-slate-500">{{ health_summary.message }}</p>
+          </div>
+          <span class="status-badge {% if health_summary.status != 'normal' %}status-badge-muted{% endif %}">{{ health_summary.status_label }}</span>
+        </div>
+        <div class="grid gap-3 md:grid-cols-4">
+          {% for item in health_items %}
+            <div class="import-stat-card {% if item.status == 'normal' %}import-stat-card-ok{% elif item.status == 'warning' %}import-stat-card-warn{% else %}import-stat-card-error{% endif %}">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="text-xs font-semibold text-slate-500">{{ item.label }}</div>
+                  <div class="mt-1 text-sm font-semibold text-slate-950">{{ item.message }}</div>
+                </div>
+                <span class="status-badge {% if item.status != 'normal' %}status-badge-muted{% endif %}">{{ item.status_label }}</span>
+              </div>
+              <a class="action-link mt-3 inline-flex" href="{{ item.action_url }}">{{ item.action_label }}</a>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="border-b border-slate-200 px-4 py-4">
+        <div class="grid gap-3 md:grid-cols-4">
+          <div class="import-stat-card">
+            <div class="text-xs text-slate-500">负责人</div>
+            <div class="mt-1 text-base font-semibold text-slate-950">{{ overview.owner or "-" }}</div>
+          </div>
+          <div class="import-stat-card">
+            <div class="text-xs text-slate-500">产品信息数</div>
+            <div class="mt-1 text-base font-semibold text-slate-950">{{ overview.product_msku_count or 0 }}</div>
+          </div>
+          <div class="import-stat-card">
+            <div class="text-xs text-slate-500">销占比 SKU 数</div>
+            <div class="mt-1 text-base font-semibold text-slate-950">{{ overview.allocation_msku_count or 0 }}</div>
+          </div>
+          <div class="import-stat-card">
+            <div class="text-xs text-slate-500">销售预估月份</div>
+            <div class="mt-1 text-base font-semibold text-slate-950">{{ overview.forecast_month_count or 0 }}</div>
+          </div>
+        </div>
+
+        <div class="mt-4 grid gap-3 md:grid-cols-2">
+          <div class="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
+            <div class="mb-2 font-semibold text-slate-900">负责人配置</div>
+            <div>Listing 状态：{{ overview.listing_status or "-" }}</div>
+            <div>Listing 维护人：{{ overview.listing_maintainer or "-" }}</div>
+            <div>项目组：{{ overview.project_group or "-" }}</div>
+          </div>
+          <div class="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
+            <div class="mb-2 font-semibold text-slate-900">缺口状态</div>
+            <div class="flex flex-wrap gap-2">
+              {% for label in issue_labels %}
+                <span class="status-badge {% if label != '正常' %}status-badge-muted{% endif %}">{{ label }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <a class="btn-secondary" href="/product-ops/allocations/import-template?store_site={{ profile.store_site|urlencode }}&amp;listing={{ profile.listing|urlencode }}" download>销占比模板</a>
+          <a class="btn-secondary" href="/product-ops/allocations/import">销占比维护</a>
+          <a class="btn-secondary" href="/product-ops/forecasts/import-template?store_site={{ profile.store_site|urlencode }}&amp;listing={{ profile.listing|urlencode }}" download>预估模板</a>
+          <a class="btn-secondary" href="/product-ops/forecasts/import">预估维护</a>
+        </div>
+      </div>
+
+      <div class="border-b border-slate-200 px-4 py-4">
+        <h3 class="mb-3 text-sm font-semibold text-slate-900">销占比明细</h3>
+        <div class="table-wrap">
+          <table class="data-table ops-list-table product-ops-table text-sm">
+            <thead class="text-left">
+              <tr>
+                <th class="table-head">MSKU</th>
+                <th class="table-head">SKU</th>
+                <th class="table-head">款式</th>
+                <th class="table-head">款式销占比</th>
+                <th class="table-head">SKU销占比</th>
+                <th class="table-head">备货定位</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in allocation_rows %}
+                <tr class="table-row">
+                  <td class="table-cell mono">{{ row.msku or "-" }}</td>
+                  <td class="table-cell mono">{{ row.sku or "-" }}</td>
+                  <td class="table-cell">{{ row.style or "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.style_sales_ratio|percent }}</td>
+                  <td class="table-cell numeric-cell">{{ row.sku_sales_ratio|percent }}</td>
+                  <td class="table-cell">{{ row.stocking_position or "-" }}</td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="6">
+                    <div class="empty-state">
+                      <div class="empty-state-title">暂无销占比数据</div>
+                      <div class="empty-state-copy">可先下载销占比模板后导入维护。</div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="px-4 py-4">
+        <h3 class="mb-3 text-sm font-semibold text-slate-900">销售预估月份</h3>
+        <div class="table-wrap">
+          <table class="data-table ops-list-table product-ops-table text-sm">
+            <thead class="text-left">
+              <tr>
+                <th class="table-head">月份</th>
+                <th class="table-head">Listing月度预估销量</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in forecast_rows %}
+                <tr class="table-row">
+                  <td class="table-cell">{{ row.forecast_month or "-" }}</td>
+                  <td class="table-cell numeric-cell">{{ row.forecast_units if row.forecast_units is not none else "-" }}</td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="2">
+                    <div class="empty-state">
+                      <div class="empty-state-title">暂无销售预估数据</div>
+                      <div class="empty-state-copy">可先下载销售预估模板后导入维护。</div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

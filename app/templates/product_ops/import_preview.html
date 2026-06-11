@@ -1,0 +1,117 @@
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
+
+{% block content %}
+  <div class="ops-workbench product-ops-workbench">
+    {% include "product_ops/_tabs.html" %}
+
+    <div class="content-panel ops-results-panel product-ops-results-panel">
+      <div class="panel-heading ops-results-heading">
+        <div>
+          <h2 class="panel-title">导入预览</h2>
+          <p class="panel-subtitle">只读校验本地目录：{{ preview.base_dir }}</p>
+        </div>
+        <div class="flex gap-2">
+          <a class="btn-secondary" href="/product-ops/import-preview/forecast-store-site-review">查看待排查</a>
+          <a class="btn-primary" href="/product-ops/import-preview/forecast-store-site-review.xlsx" download>下载修正模板</a>
+          <form method="post" action="/product-ops/import-preview/commit">
+            <button class="btn-primary" type="submit">确认写入经营数据</button>
+          </form>
+        </div>
+      </div>
+
+      {% if source_commit_result %}
+        <div class="import-result-card">
+          <div class="font-medium text-slate-950">{{ source_commit_result.message }}</div>
+          <div class="text-sm text-slate-600">
+            销占比：新增 {{ source_commit_result.allocation.inserted_count }} 行，更新 {{ source_commit_result.allocation.updated_count }} 行，跳过 {{ source_commit_result.allocation.skipped_count }} 行
+          </div>
+          <div class="text-sm text-slate-600">
+            销售预估：新增 {{ source_commit_result.forecast.inserted_count }} 行，更新 {{ source_commit_result.forecast.updated_count }} 行，跳过 {{ source_commit_result.forecast.skipped_count }} 行
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="table-wrap">
+        <table class="data-table ops-list-table product-ops-table text-sm">
+          <thead class="text-left">
+            <tr>
+              <th class="table-head">数据类型</th>
+              <th class="table-head">文件数</th>
+              <th class="table-head">总行数</th>
+              <th class="table-head">主键缺失</th>
+              <th class="table-head">重复唯一键</th>
+              <th class="table-head">源表缺店铺站点</th>
+              <th class="table-head">已明确店铺站点</th>
+              <th class="table-head">自动补店铺站点</th>
+              <th class="table-head">未匹配负责人配置</th>
+              <th class="table-head">一对多歧义</th>
+              <th class="table-head">可由销占比定位</th>
+              <th class="table-head">仍需人工处理</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in datasets %}
+              <tr class="table-row">
+                <td class="table-cell font-medium text-slate-950">{{ item.label }}</td>
+                <td class="table-cell">{{ item.file_count }}</td>
+                <td class="table-cell">{{ item.total_rows }}</td>
+                <td class="table-cell">{{ item.missing_key_count }}</td>
+                <td class="table-cell">{{ item.duplicate_key_count }}</td>
+                <td class="table-cell">{{ item.store_site_missing_count|default(0) }}</td>
+                <td class="table-cell">{{ item.store_site_explicit_count|default(0) }}</td>
+                <td class="table-cell">{{ item.store_site_inferred_count|default(0) }}</td>
+                <td class="table-cell">{{ item.owner_unmatched_count }}</td>
+                <td class="table-cell">{{ item.owner_ambiguous_count }}</td>
+                <td class="table-cell">{{ item.owner_resolved_by_allocation_count }}</td>
+                <td class="table-cell">{{ item.owner_unresolved_ambiguous_count }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% for item in datasets %}
+      <div class="content-panel ops-results-panel product-ops-results-panel">
+        <div class="panel-heading ops-results-heading">
+          <div>
+            <h2 class="panel-title">{{ item.label }}问题样例</h2>
+            <p class="panel-subtitle">最多显示前 {{ item.issue_rows|length }} 条，完整数量以上方摘要为准。</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table ops-list-table product-ops-table text-sm">
+            <thead class="text-left">
+              <tr>
+                <th class="table-head">问题</th>
+                <th class="table-head">文件</th>
+                <th class="table-head">行号</th>
+                <th class="table-head">唯一键</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in item.issue_rows %}
+                <tr class="table-row">
+                  <td class="table-cell">{{ row.issue }}</td>
+                  <td class="table-cell">{{ row.file or "-" }}</td>
+                  <td class="table-cell">{{ row.row_number or "-" }}</td>
+                  <td class="table-cell mono">{{ row.key or "-" }}</td>
+                </tr>
+              {% else %}
+                <tr>
+                  <td colspan="4">
+                    <div class="empty-state">
+                      <div class="empty-state-title">暂无问题样例</div>
+                      <div class="empty-state-copy">当前预览没有发现需要优先处理的问题。</div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

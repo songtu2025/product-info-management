@@ -1,0 +1,113 @@
+{% extends "partial.html" if request.headers.get("x-partial-request") == "1" else "layout.html" %}
+
+{% block content %}
+  <div class="ops-workbench product-ops-workbench">
+    {% include "product_ops/_tabs.html" %}
+
+    <div class="content-panel ops-results-panel product-ops-results-panel">
+      <div class="panel-heading ops-results-heading">
+        <div>
+          <h2 class="panel-title">销售预估批量维护</h2>
+          <p class="panel-subtitle">上传维护模板，按店铺站点 + Listing + 月份新增或更新销售预估。</p>
+        </div>
+        <div class="product-ops-filter-actions">
+          <a class="btn-secondary" href="/product-ops/forecasts">返回销售预估</a>
+          <a class="btn-primary" href="/product-ops/forecasts/import-template" download>下载维护模板</a>
+        </div>
+      </div>
+
+      <div class="border-b border-slate-200 px-4 py-4">
+        <form class="grid gap-3 md:grid-cols-[1fr_auto]" action="/product-ops/forecasts/import/preview" method="post" enctype="multipart/form-data">
+          <label class="field">
+            <span class="field-label">上传销售预估维护 Excel</span>
+            <input class="field-input" name="file" type="file" accept=".xlsx" required>
+          </label>
+          <div class="flex items-end">
+            <button class="btn-primary" type="submit">校验预览</button>
+          </div>
+        </form>
+      </div>
+
+      {% if error %}
+        <div class="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {{ error }}
+        </div>
+      {% endif %}
+
+      {% if commit_result %}
+        <div class="mx-4 mt-4 rounded-md border {% if commit_result.success %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-red-200 bg-red-50 text-red-700{% endif %} px-4 py-3 text-sm">
+          {{ commit_result.message }}
+          {% if commit_result.success %}
+            ，新增 {{ commit_result.inserted_count }} 行，更新 {{ commit_result.updated_count }} 行，跳过 {{ commit_result.skipped_count }} 行。
+            <a class="action-link ml-2" href="/operation-logs?table_name=amazon_sales_forecast{% if changed_by %}&amp;changed_by={{ changed_by|urlencode }}{% endif %}">查看本次导入日志</a>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if forecast_preview %}
+        <div class="border-b border-slate-200 px-4 py-4">
+          <h3 class="mb-3 text-sm font-semibold text-slate-900">销售预估维护预览</h3>
+          <div class="grid gap-3 md:grid-cols-4">
+            <div class="import-stat-card">
+              <div class="text-xs text-slate-500">总行数</div>
+              <div class="mt-1 text-lg font-semibold text-slate-950">{{ forecast_preview.total_rows }}</div>
+            </div>
+            <div class="import-stat-card import-stat-card-ok">
+              <div class="text-xs text-emerald-700">可写入</div>
+              <div class="mt-1 text-lg font-semibold text-emerald-800">可写入 {{ forecast_preview.valid_count }} 行</div>
+            </div>
+            <div class="import-stat-card import-stat-card-ok">
+              <div class="text-xs text-emerald-700">新增 / 更新</div>
+              <div class="mt-1 text-lg font-semibold text-emerald-800">新增 {{ forecast_preview.insert_count }} 行，更新 {{ forecast_preview.update_count }} 行</div>
+            </div>
+            <div class="import-stat-card import-stat-card-error">
+              <div class="text-xs text-red-700">错误行</div>
+              <div class="mt-1 text-lg font-semibold text-red-800">错误行 {{ forecast_preview.error_count }} 行</div>
+            </div>
+          </div>
+
+          {% if import_token and forecast_preview.valid_count > 0 and forecast_preview.error_count == 0 %}
+            <form class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3" action="/product-ops/forecasts/import/commit" method="post">
+              <input type="hidden" name="import_token" value="{{ import_token }}">
+              <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div class="text-sm text-emerald-800">校验通过，可确认写入销售预估。</div>
+                <button
+                  class="btn-primary"
+                  data-confirm="确认写入销售预估？将新增或更新 {{ forecast_preview.valid_count }} 行。"
+                  type="submit"
+                >确认写入销售预估</button>
+              </div>
+            </form>
+          {% endif %}
+
+          <div class="mt-4 grid gap-4 lg:grid-cols-2">
+            <div>
+              <h4 class="mb-2 text-sm font-semibold text-slate-900">可写入行样例</h4>
+              <div class="rounded-md border border-slate-200 bg-white">
+                {% for row in forecast_preview.valid_rows %}
+                  <div class="border-b border-slate-100 px-3 py-2 text-sm last:border-b-0">
+                    第 {{ row.row_number }} 行：{{ row.action }} / {{ row.store_site }} / {{ row.listing }} / {{ row.forecast_month }} / {{ row.forecast_units }}
+                  </div>
+                {% else %}
+                  <div class="px-3 py-3 text-sm text-slate-500">无</div>
+                {% endfor %}
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 text-sm font-semibold text-slate-900">错误行样例</h4>
+              <div class="rounded-md border border-slate-200 bg-white">
+                {% for row in forecast_preview.error_rows %}
+                  <div class="border-b border-slate-100 px-3 py-2 text-sm last:border-b-0">
+                    第 {{ row.row_number }} 行：{{ row.message }}
+                  </div>
+                {% else %}
+                  <div class="px-3 py-3 text-sm text-slate-500">无</div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

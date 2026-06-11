@@ -71,6 +71,7 @@ def test_product_list_renders_rows_and_pagination(monkeypatch):
     assert "操作" in response.text
     assert "详情" in response.text
     assert "日志" in response.text
+    assert "/product-ops/listing-profile?store_site=SAYOLA%3AUS&amp;listing=ListingA" in response.text
     assert "/products/7" in response.text
     assert "/operation-logs?table_name=amazon_product_info&amp;record_id=7" in response.text
     assert "/products/7/edit" in response.text

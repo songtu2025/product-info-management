@@ -148,3 +148,66 @@ CREATE TABLE amazon_user_preference (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
   COMMENT='Amazon后台用户偏好表';
+
+
+### 5.7 创建 `amazon_sales_allocation`
+
+
+CREATE TABLE amazon_sales_allocation (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '技术主键',
+
+    store_site VARCHAR(50) NOT NULL COMMENT '店铺/站点',
+    site VARCHAR(20) NOT NULL COMMENT '站点',
+    owner VARCHAR(50) NULL COMMENT '负责人',
+    listing VARCHAR(100) NOT NULL COMMENT 'Listing',
+    style VARCHAR(100) NULL COMMENT '款式',
+    msku VARCHAR(100) NOT NULL COMMENT 'MSKU',
+    sku VARCHAR(100) NOT NULL COMMENT '积加SKU',
+    scale_position VARCHAR(50) NULL COMMENT '规模定位',
+    style_sales_ratio DECIMAL(12, 6) NULL COMMENT '款式销占比',
+    sku_sales_ratio DECIMAL(12, 6) NULL COMMENT 'SKU销占比',
+    demand_position VARCHAR(50) NULL COMMENT '需求定位',
+    shipping_position VARCHAR(50) NULL COMMENT '发货定位',
+    stocking_position VARCHAR(50) NULL COMMENT '备货定位',
+    operation_min_order_days INT NULL COMMENT '运营保底下单天数',
+    total_shipping_days INT NULL COMMENT '总发货天数',
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_store_site_listing_msku (store_site, listing, msku),
+    KEY idx_store_site_listing (store_site, listing),
+    KEY idx_sku (sku),
+    KEY idx_owner (owner)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Amazon销占比配置表';
+
+
+### 5.8 创建 `amazon_sales_forecast`
+
+
+CREATE TABLE amazon_sales_forecast (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '技术主键',
+
+    store_site VARCHAR(50) NOT NULL COMMENT '店铺/站点',
+    site VARCHAR(20) NOT NULL COMMENT '站点',
+    listing VARCHAR(100) NOT NULL COMMENT 'Listing',
+    forecast_month DATE NOT NULL COMMENT '预估月份，使用当月1日',
+    forecast_units DECIMAL(14, 2) NOT NULL DEFAULT 0 COMMENT 'Listing月度预估销量',
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_store_site_listing_month (store_site, listing, forecast_month),
+    KEY idx_store_site_listing (store_site, listing),
+    KEY idx_site_listing (site, listing),
+    KEY idx_listing (listing),
+    KEY idx_forecast_month (forecast_month)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='Amazon销售预估表';

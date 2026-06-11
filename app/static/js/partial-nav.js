@@ -9,11 +9,18 @@
 
   let latestRequestId = 0;
   const sameOrigin = (url) => url.origin === window.location.origin;
+  const isPlaceholderLink = (link) => link && link.getAttribute("href") === "#";
   const isDownloadUrl = (url) => (
     url.pathname.startsWith("/products/export")
     || url.pathname === "/products/import/template"
     || url.pathname === "/products/import/issues"
     || url.pathname === "/data-quality/export"
+    || url.pathname === "/product-ops/export"
+    || url.pathname === "/product-ops/allocations/export"
+    || url.pathname === "/product-ops/allocations/import-template"
+    || url.pathname === "/product-ops/forecasts/export"
+    || url.pathname === "/product-ops/forecasts/import-template"
+    || url.pathname === "/product-ops/gaps/export"
   );
   const shouldUsePartial = (url, link) => (
     sameOrigin(url)
@@ -75,7 +82,7 @@
   const refreshActiveNav = (url, label) => {
     navLinks.forEach((link) => {
       const linkUrl = new URL(link.href, window.location.origin);
-      const isActive = linkUrl.pathname === url.pathname;
+      const isActive = !isPlaceholderLink(link) && linkUrl.pathname === url.pathname;
       link.classList.toggle("nav-link-active", isActive);
       if (isActive && pageKicker) {
         pageKicker.textContent = label || link.dataset.navLabel || pageKicker.textContent;
